@@ -703,6 +703,30 @@ function sanitizeModelResponse(content, aiBot, personality, intent) {
   return trimmed;
 }
 
+function isConfiguredProvider(personality) {
+  if (!personality) {
+    return false;
+  }
+
+  if (personality.provider === 'ollama' || personality.provider === 'codex-cli') {
+    return true;
+  }
+
+  const { apiKey, url } = getProviderCredentials(personality.provider);
+  return Boolean(apiKey && url);
+}
+
+function buildAutonomousDebatePrompt({ topic, round, rounds, aiBot }) {
+  return [
+    `자율 토론 주제: ${topic}`,
+    `현재 ${round}/${rounds} 라운드이며 지금은 ${aiBot.name}의 발언 차례다.`,
+    '인사, 서론, 자기소개를 하지 마라.',
+    '직전 발언이나 앞선 주장 중 하나를 직접 이어받아 찬성, 반론, 보완 중 하나를 하라.',
+    '같은 말을 반복하지 말고, 새 정보나 새 논점을 추가하라.',
+    '2~4문장 정도로 간결하게 말하라.'
+  ].join(' ');
+}
+
 async function generateBotResponse(aiBot, triggerMessage, intent) {
   const personality = botPersonalities[aiBot.id];
   if (!personality) {
@@ -764,18 +788,39 @@ async function startAutonomousDebate({ topic, rounds, startedBy }) {
 
   const nonChairBots = chatState.aiBots.filter((bot) => !bot.isChairman);
   const chairBots = chatState.aiBots.filter((bot) => bot.isChairman);
+  const activeDebateBots = nonChairBots.filter((bot) => isConfiguredProvider(botPersonalities[bot.id]));
+  const skippedBots = nonChairBots.filter((bot) => !isConfiguredProvider(botPersonalities[bot.id]));
+
+  for (const aiBot of skippedBots) {
+    const personality = botPersonalities[aiBot.id];
+    const skippedMessage = buildSystemMessage(`${aiBot.name} 제외: provider 설정이 없어 이번 자율 토론에서는 참여하지 않습니다.`);
+    chatState.messages.push(skippedMessage);
+    io.emit('message', skippedMessage);
+
+    if (personality?.provider === 'opencode-zen' || personality?.provider === 'nvidia') {
+      const hintMessage = buildSystemMessage(`${aiBot.name} 설정 링크: ${buildFailureResponse(aiBot, personality, 'provider not configured').split(' | ').slice(-1)[0]}`);
+      chatState.messages.push(hintMessage);
+      io.emit('message', hintMessage);
+    }
+  }
 
   try {
+    const droppedBots = new Set();
+
     for (let round = 1; round <= rounds; round += 1) {
       const roundMessage = buildSystemMessage(`자율 토론 ${round}/${rounds} 라운드`);
       chatState.messages.push(roundMessage);
       io.emit('message', roundMessage);
 
-      for (const aiBot of nonChairBots) {
+      for (const aiBot of activeDebateBots) {
+        if (droppedBots.has(aiBot.id)) {
+          continue;
+        }
+
         const promptMessage = {
           id: generateId(),
           type: MessageType.TEXT,
-          content: `자율 토론 주제: ${topic}. 현재 ${round}/${rounds} 라운드이며, 지금은 ${aiBot.name}의 발언 차례다. 이전 발언을 참고해 새 의견이나 반론, 보완점을 짧고 분명하게 제시하라.`,
+          content: buildAutonomousDebatePrompt({ topic, round, rounds, aiBot }),
           timestamp: new Date(),
           sender: { id: 'system-debate', name: 'Autonomous Debate', isAI: false }
         };
@@ -787,6 +832,13 @@ async function startAutonomousDebate({ topic, rounds, startedBy }) {
 
         chatState.messages.push(aiMessage);
         io.emit('message', aiMessage);
+
+        if (aiMessage.content.includes('응답 실패')) {
+          droppedBots.add(aiBot.id);
+          const stopMessage = buildSystemMessage(`${aiBot.name} 는 이번 토론에서 응답 실패가 발생해 남은 라운드에서 제외됩니다.`);
+          chatState.messages.push(stopMessage);
+          io.emit('message', stopMessage);
+        }
       }
     }
 
