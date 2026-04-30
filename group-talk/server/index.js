@@ -40,6 +40,12 @@ const chatState = {
   users: new Map(),
   messages: [],
   codexThreadIds: {},
+  autonomousDebate: {
+    active: false,
+    topic: '',
+    rounds: 0,
+    startedBy: null
+  },
   aiBots: [
     { id: 'ai-1', name: MODEL_NAMES.nvidiaArchitect, type: 'nvidia', color: '#FF6B6B', roleLabel: 'Architect' },
     { id: 'ai-2', name: MODEL_NAMES.nvidiaCritic, type: 'nvidia', color: '#4ECDC4', roleLabel: 'Critic' },
@@ -90,7 +96,8 @@ io.on('connection', (socket) => {
     io.emit('chatState', {
       users: Array.from(chatState.users.values()),
       messages: chatState.messages,
-      aiBots: chatState.aiBots
+      aiBots: chatState.aiBots,
+      autonomousDebate: chatState.autonomousDebate
     });
   });
 
@@ -98,7 +105,8 @@ io.on('connection', (socket) => {
     socket.emit('chatState', {
       users: Array.from(chatState.users.values()),
       messages: chatState.messages,
-      aiBots: chatState.aiBots
+      aiBots: chatState.aiBots,
+      autonomousDebate: chatState.autonomousDebate
     });
   });
 
@@ -106,6 +114,18 @@ io.on('connection', (socket) => {
   socket.on('message', (messageData) => {
     const user = chatState.users.get(socket.id);
     if (!user) return;
+
+    if (chatState.autonomousDebate.active) {
+      const blockedMessage = {
+        id: generateId(),
+        type: MessageType.SYSTEM,
+        content: '자율 토론이 진행 중이라 지금은 사람 메시지를 받을 수 없습니다.',
+        timestamp: new Date(),
+        sender: null
+      };
+      socket.emit('message', blockedMessage);
+      return;
+    }
 
     const message = {
       id: generateId(),
@@ -122,6 +142,24 @@ io.on('connection', (socket) => {
 
     // AI 봇 응답 트리거
     triggerAIResponse(message);
+  });
+
+  socket.on('startAutonomousDebate', async ({ topic, rounds }) => {
+    const user = chatState.users.get(socket.id);
+    if (!user) return;
+    if (chatState.autonomousDebate.active) return;
+
+    const normalizedTopic = String(topic || '').trim();
+    const normalizedRounds = Math.min(Math.max(Number(rounds) || 3, 1), 5);
+    if (!normalizedTopic) {
+      return;
+    }
+
+    await startAutonomousDebate({
+      topic: normalizedTopic,
+      rounds: normalizedRounds,
+      startedBy: user.name
+    });
   });
 
   // 연결 해제
@@ -143,6 +181,20 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+function buildSystemMessage(content) {
+  return {
+    id: generateId(),
+    type: MessageType.SYSTEM,
+    content,
+    timestamp: new Date(),
+    sender: null
+  };
+}
+
+function emitDebateState() {
+  io.emit('debateState', chatState.autonomousDebate);
+}
 
 // AI 봇별 페르소나 및 응답 템플릿
 const botPersonalities = {
@@ -695,6 +747,79 @@ async function generateBotResponse(aiBot, triggerMessage, intent) {
     timestamp: new Date(),
     sender: { ...aiBot, isAI: true }
   };
+}
+
+async function startAutonomousDebate({ topic, rounds, startedBy }) {
+  chatState.autonomousDebate = {
+    active: true,
+    topic,
+    rounds,
+    startedBy
+  };
+  emitDebateState();
+
+  const startMessage = buildSystemMessage(`자율 토론 시작 | 주제: ${topic} | 라운드: ${rounds} | 시작자: ${startedBy}`);
+  chatState.messages.push(startMessage);
+  io.emit('message', startMessage);
+
+  const nonChairBots = chatState.aiBots.filter((bot) => !bot.isChairman);
+  const chairBots = chatState.aiBots.filter((bot) => bot.isChairman);
+
+  try {
+    for (let round = 1; round <= rounds; round += 1) {
+      const roundMessage = buildSystemMessage(`자율 토론 ${round}/${rounds} 라운드`);
+      chatState.messages.push(roundMessage);
+      io.emit('message', roundMessage);
+
+      for (const aiBot of nonChairBots) {
+        const promptMessage = {
+          id: generateId(),
+          type: MessageType.TEXT,
+          content: `자율 토론 주제: ${topic}. 현재 ${round}/${rounds} 라운드이며, 지금은 ${aiBot.name}의 발언 차례다. 이전 발언을 참고해 새 의견이나 반론, 보완점을 짧고 분명하게 제시하라.`,
+          timestamp: new Date(),
+          sender: { id: 'system-debate', name: 'Autonomous Debate', isAI: false }
+        };
+
+        const aiMessage = await generateBotResponse(aiBot, promptMessage, 'general');
+        if (!aiMessage) {
+          continue;
+        }
+
+        chatState.messages.push(aiMessage);
+        io.emit('message', aiMessage);
+      }
+    }
+
+    for (const aiBot of chairBots) {
+      const chairPrompt = {
+        id: generateId(),
+        type: MessageType.TEXT,
+        content: `자율 토론 주제: ${topic}. 전체 ${rounds}개 라운드가 끝났다. 지금까지의 발언을 종합해 핵심 쟁점, 합의점, 남은 리스크, 최종 추천안을 간결하게 정리하라.`,
+        timestamp: new Date(),
+        sender: { id: 'system-debate', name: 'Autonomous Debate', isAI: false }
+      };
+
+      const aiMessage = await generateBotResponse(aiBot, chairPrompt, 'general');
+      if (!aiMessage) {
+        continue;
+      }
+
+      chatState.messages.push(aiMessage);
+      io.emit('message', aiMessage);
+    }
+  } finally {
+    chatState.autonomousDebate = {
+      active: false,
+      topic: '',
+      rounds: 0,
+      startedBy: null
+    };
+    emitDebateState();
+
+    const endMessage = buildSystemMessage('자율 토론이 종료되었습니다.');
+    chatState.messages.push(endMessage);
+    io.emit('message', endMessage);
+  }
 }
 
 // AI 응답 생성
