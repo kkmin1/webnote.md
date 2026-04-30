@@ -29,8 +29,9 @@ const MODEL_NAMES = {
   codexChair: process.env.CODEX_MODEL || 'gpt-5.4'
 };
 
-const MIN_DETAILED_RESPONSE_CHARS = Number(process.env.MIN_DETAILED_RESPONSE_CHARS || 700);
 const CODEX_TIMEOUT_MS = Number(process.env.CODEX_TIMEOUT_MS || 120000);
+const NVIDIA_TIMEOUT_MS = Number(process.env.NVIDIA_TIMEOUT_MS || 30000);
+const DEFAULT_PROVIDER_TIMEOUT_MS = Number(process.env.DEFAULT_PROVIDER_TIMEOUT_MS || 60000);
 
 // 채팅방 상태 관리
 const chatState = {
@@ -151,7 +152,7 @@ const botPersonalities = {
       '항상 한국어로 답하라.',
       '가벼운 잡담이 아니라 전문적인 심층토론에 참여한다.',
       '주어진 질문을 구조화하고, 문제 정의, 가정, 설계 방향, 실행 전략을 제안하라.',
-      '기술적이거나 복잡한 질문에는 충분히 자세히 답하라. 다만 단순 인사나 짧은 안부에는 짧고 자연스럽게 답하라.',
+      '질문에 직접 답하고 불필요하게 길어지지 마라.',
       '불확실성이 있으면 명확히 표시하라.'
     ].join(' ')
   },
@@ -191,8 +192,7 @@ const botPersonalities = {
       `당신은 Group Talk의 ${MODEL_NAMES.codexMember}다.`,
       '항상 한국어로 답하라.',
       '역할은 일반 멤버 엔지니어다. 의장이 아니라, 코드 구현, 마이그레이션 전략, 테스트 계획, 실패 모드, 디버깅 포인트를 상세하게 제시하라.',
-      '실무자가 바로 작업에 옮길 수 있을 정도로 충분히 자세하게 답하라.',
-      '복잡한 질문에는 길고 구체적으로 작성하되, 단순 인사에는 짧고 자연스럽게 답하라.'
+      '답변은 핵심 위주로 간결하게 작성하고, 사용자가 자세한 설명을 요청할 때만 길게 확장하라.'
     ].join(' ')
   },
   'ai-5': {
@@ -205,7 +205,7 @@ const botPersonalities = {
       '항상 한국어로 답하라.',
       '역할은 의장이다. 여러 모델의 의견을 종합하고, 핵심 쟁점, 합의점, 남은 리스크, 다음 액션을 정리하라.',
       '특히 코딩, 설계, 디버깅, 시스템 트레이드오프에서는 실무적으로 가장 타당한 결론을 제시하라.',
-      '복잡한 질문에는 섹션과 항목을 사용해 자세히 정리하라. 단순 인사에는 짧게 답하라.'
+      '답변은 핵심 위주로 간결하게 정리하고, 사용자가 자세한 설명을 원할 때만 길게 확장하라.'
     ].join(' ')
   }
 };
@@ -276,8 +276,9 @@ function buildResponseGuidance(intent) {
   }
 
   return [
-    '이번 발화는 실질적인 토론 질문일 가능성이 높다.',
-    '가능하면 배경, 판단 근거, 트레이드오프, 추천안까지 충분히 설명하라.'
+    '이번 발화에 직접 답하라.',
+    '불필요한 서론과 과도한 장문 설명을 피하라.',
+    '사용자가 자세함을 명시적으로 요청할 때만 길게 설명하라.'
   ].join(' | ');
 }
 
@@ -305,23 +306,16 @@ function buildConversationMessages(triggerMessage, personality) {
   ];
 }
 
-function shouldRetryForDetail(content, intent) {
-  if (intent === 'identity' || intent === 'greeting') {
-    return false;
+function getRequestTimeout(provider) {
+  if (provider === 'codex-cli') {
+    return CODEX_TIMEOUT_MS;
   }
 
-  return !content || content.trim().length < MIN_DETAILED_RESPONSE_CHARS;
-}
+  if (provider === 'nvidia') {
+    return NVIDIA_TIMEOUT_MS;
+  }
 
-function buildRetryMessages(messages, personality) {
-  const retryInstruction = [
-    '이전 답변이 너무 짧거나 추상적이었다.',
-    `최소 ${MIN_DETAILED_RESPONSE_CHARS}자 이상을 목표로 하라.`,
-    '배경, 핵심 판단 근거, 트레이드오프, 실행 방안, 주의사항을 더 자세히 써라.',
-    '짧은 결론 한 줄로 끝내지 마라.'
-  ].join(' ');
-
-  return [...messages, { role: 'user', content: retryInstruction }, { role: 'user', content: `역할을 다시 상기한다: ${personality.style}` }];
+  return DEFAULT_PROVIDER_TIMEOUT_MS;
 }
 
 function getCodexExecutable() {
@@ -528,7 +522,7 @@ async function callProvider({ provider, model, messages, botId }) {
           headers: {
             'Content-Type': 'application/json'
           },
-          timeout: 90000
+          timeout: getRequestTimeout(provider)
         }
       );
 
@@ -558,7 +552,7 @@ async function callProvider({ provider, model, messages, botId }) {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 90000
+        timeout: getRequestTimeout(provider)
       }
     );
 
@@ -592,6 +586,34 @@ function normalizeGreetingResponse(content, aiBot) {
   return trimmed;
 }
 
+function hasHangul(text) {
+  return /[가-힣]/u.test(text || '');
+}
+
+function isNonKoreanDominant(text) {
+  const source = text || '';
+  const hangulCount = (source.match(/[가-힣]/gu) || []).length;
+  const cjkCount = (source.match(/[\u4E00-\u9FFF]/gu) || []).length;
+  return cjkCount >= 8 && hangulCount === 0;
+}
+
+function sanitizeModelResponse(content, aiBot, personality, intent) {
+  const trimmed = (content || '').trim();
+  if (!trimmed) {
+    return buildFailureResponse(aiBot, personality, 'empty response');
+  }
+
+  if (intent === 'greeting') {
+    return normalizeGreetingResponse(trimmed, aiBot);
+  }
+
+  if (personality.provider === 'nvidia' && isNonKoreanDominant(trimmed)) {
+    return buildFailureResponse(aiBot, personality, 'non-Korean response detected');
+  }
+
+  return trimmed;
+}
+
 async function generateBotResponse(aiBot, triggerMessage, intent) {
   const personality = botPersonalities[aiBot.id];
   if (!personality) {
@@ -605,7 +627,7 @@ async function generateBotResponse(aiBot, triggerMessage, intent) {
       aiResponse = buildIdentityResponse(aiBot, personality);
     } else {
       const messages = buildConversationMessages(triggerMessage, personality);
-      const requestTimeout = personality.provider === 'codex-cli' ? CODEX_TIMEOUT_MS : 90000;
+      const requestTimeout = getRequestTimeout(personality.provider);
 
       console.log(`Calling ${personality.provider} for ${aiBot.name}...`);
       aiResponse = await Promise.race([
@@ -617,31 +639,16 @@ async function generateBotResponse(aiBot, triggerMessage, intent) {
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), requestTimeout))
       ]);
-
-      if (shouldRetryForDetail(aiResponse, intent)) {
-        const retriedMessages = buildRetryMessages(messages, personality);
-        aiResponse = await Promise.race([
-          callProvider({
-            provider: personality.provider,
-            model: personality.model,
-            messages: retriedMessages,
-            botId: aiBot.id
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('detail retry timeout')), requestTimeout))
-        ]);
-      }
     }
   } catch (error) {
     console.error(`${aiBot.name} error:`, error.message);
     aiResponse = buildFailureResponse(aiBot, personality, error.message);
   }
 
-  if (!aiResponse) {
+  if (typeof aiResponse !== 'string') {
     aiResponse = buildFailureResponse(aiBot, personality, 'empty response');
-  }
-
-  if (intent === 'greeting' && !aiResponse.includes('응답 실패')) {
-    aiResponse = normalizeGreetingResponse(aiResponse, aiBot);
+  } else if (!aiResponse.includes('응답 실패')) {
+    aiResponse = sanitizeModelResponse(aiResponse, aiBot, personality, intent);
   }
 
   return {
