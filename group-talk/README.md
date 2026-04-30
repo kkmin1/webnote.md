@@ -72,11 +72,12 @@ OLLAMA_GEMMA_MODEL=gemma4:31b-cloud
 
 ### OpenCode Zen free model 사용
 
-OpenCode Zen은 일부 무료 모델을 `chat/completions` 엔드포인트로 제공합니다. 현재 기본값은 `nemotron-3-super-free`입니다.
+OpenCode Zen은 일부 무료 모델을 `chat/completions` 엔드포인트로 제공합니다. 현재 기본값은 `nemotron-3-super-free`와 `hy3-preview-free`입니다.
 
 ```
 OPENCODE_ZEN_API_KEY=your_opencode_zen_api_key_here
 OPENCODE_ZEN_FREE_MODEL=nemotron-3-super-free
+OPENCODE_ZEN_FREE_MODEL_ALT=hy3-preview-free
 ```
 
 참고:
