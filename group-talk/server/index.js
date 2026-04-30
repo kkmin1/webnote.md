@@ -25,6 +25,7 @@ const MODEL_NAMES = {
   nvidiaArchitect: process.env.NVIDIA_ARCHITECT_MODEL || 'deepseek-ai/deepseek-v3.2',
   nvidiaCritic: process.env.NVIDIA_CRITIC_MODEL || 'mistralai/magistral-small-2506',
   ollamaGemma: process.env.OLLAMA_GEMMA_MODEL || 'gemma4:31b-cloud',
+  zenFree: process.env.OPENCODE_ZEN_FREE_MODEL || 'nemotron-3-super-free',
   codexMember: process.env.CODEX_MEMBER_MODEL || 'gpt-5.4',
   codexChair: process.env.CODEX_MODEL || 'gpt-5.4'
 };
@@ -42,8 +43,9 @@ const chatState = {
     { id: 'ai-1', name: MODEL_NAMES.nvidiaArchitect, type: 'nvidia', color: '#FF6B6B', roleLabel: 'Architect' },
     { id: 'ai-2', name: MODEL_NAMES.nvidiaCritic, type: 'nvidia', color: '#4ECDC4', roleLabel: 'Critic' },
     { id: 'ai-3', name: MODEL_NAMES.ollamaGemma, type: 'ollama', color: '#7C5CFC', roleLabel: 'Research' },
-    { id: 'ai-4', name: MODEL_NAMES.codexMember, type: 'codex', color: '#636E72', roleLabel: 'Engineer' },
-    { id: 'ai-5', name: MODEL_NAMES.codexChair, type: 'codex', color: '#2D3436', roleLabel: 'Chair', isChairman: true }
+    { id: 'ai-4', name: MODEL_NAMES.zenFree, type: 'opencode-zen', color: '#0EA5E9', roleLabel: 'Zen' },
+    { id: 'ai-5', name: MODEL_NAMES.codexMember, type: 'codex', color: '#636E72', roleLabel: 'Engineer' },
+    { id: 'ai-6', name: MODEL_NAMES.codexChair, type: 'codex', color: '#2D3436', roleLabel: 'Chair', isChairman: true }
   ]
 };
 
@@ -184,6 +186,18 @@ const botPersonalities = {
     ].join(' ')
   },
   'ai-4': {
+    name: MODEL_NAMES.zenFree,
+    style: '여러 대안을 짧고 명료하게 비교하는 OpenCode Zen 무료 모델',
+    provider: 'opencode-zen',
+    model: MODEL_NAMES.zenFree,
+    systemPrompt: [
+      `당신은 Group Talk의 ${MODEL_NAMES.zenFree}다.`,
+      '항상 한국어로 답하라.',
+      '질문에 직접 답하고, 가능하면 2~4개의 핵심 포인트만 짧게 정리하라.',
+      '과도하게 길게 쓰지 말고, 결론과 실용적인 제안을 우선하라.'
+    ].join(' ')
+  },
+  'ai-5': {
     name: MODEL_NAMES.codexMember,
     style: '구현 세부사항과 코드 변경 전략을 깊게 파고드는 시니어 엔지니어',
     provider: 'codex-cli',
@@ -195,7 +209,7 @@ const botPersonalities = {
       '답변은 핵심 위주로 간결하게 작성하고, 사용자가 자세한 설명을 요청할 때만 길게 확장하라.'
     ].join(' ')
   },
-  'ai-5': {
+  'ai-6': {
     name: MODEL_NAMES.codexChair,
     style: '전체 토론을 종합하고 기술적 의사결정을 마무리하는 의장',
     provider: 'codex-cli',
@@ -241,6 +255,7 @@ function buildIdentityResponse(aiBot, personality) {
   const providerLabel = {
     nvidia: 'NVIDIA',
     ollama: 'Ollama',
+    'opencode-zen': 'OpenCode Zen',
     'codex-cli': 'Codex CLI'
   };
 
@@ -252,6 +267,7 @@ function buildFailureResponse(aiBot, personality, reason) {
   const setupLinks = {
     nvidia: 'https://build.nvidia.com/',
     ollama: 'https://ollama.com/settings',
+    'opencode-zen': 'https://opencode.ai/docs/zen/',
     'codex-cli': 'https://platform.openai.com/'
   };
 
@@ -493,6 +509,13 @@ function getProviderCredentials(provider) {
     return {
       apiKey: null,
       url: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/api/chat'
+    };
+  }
+
+  if (provider === 'opencode-zen') {
+    return {
+      apiKey: process.env.OPENCODE_ZEN_API_KEY,
+      url: 'https://opencode.ai/zen/v1/chat/completions'
     };
   }
 
