@@ -25,10 +25,6 @@ const MODEL_NAMES = {
   nvidiaArchitect: process.env.NVIDIA_ARCHITECT_MODEL || 'deepseek-ai/deepseek-v3.2',
   nvidiaCritic: process.env.NVIDIA_CRITIC_MODEL || 'mistralai/magistral-small-2506',
   ollamaGemma: process.env.OLLAMA_GEMMA_MODEL || 'gemma4:31b-cloud',
-  groqFast: process.env.GROQ_FAST_MODEL || 'openai/gpt-oss-20b',
-  groqScout: process.env.GROQ_SCOUT_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct',
-  cerebrasChair: process.env.CEREBRAS_CHAIR_MODEL || 'gpt-oss-120b',
-  cerebrasAnalyst: process.env.CEREBRAS_ANALYST_MODEL || 'qwen-3-32b',
   codexMember: process.env.CODEX_MEMBER_MODEL || 'gpt-5.4',
   codexChair: process.env.CODEX_MODEL || 'gpt-5.4'
 };
@@ -45,12 +41,8 @@ const chatState = {
     { id: 'ai-1', name: MODEL_NAMES.nvidiaArchitect, type: 'nvidia', color: '#FF6B6B', roleLabel: 'Architect' },
     { id: 'ai-2', name: MODEL_NAMES.nvidiaCritic, type: 'nvidia', color: '#4ECDC4', roleLabel: 'Critic' },
     { id: 'ai-3', name: MODEL_NAMES.ollamaGemma, type: 'ollama', color: '#7C5CFC', roleLabel: 'Research' },
-    { id: 'ai-4', name: MODEL_NAMES.groqFast, type: 'groq', color: '#00B894', roleLabel: 'Options' },
-    { id: 'ai-5', name: MODEL_NAMES.groqScout, type: 'groq', color: '#0984E3', roleLabel: 'Product' },
-    { id: 'ai-6', name: MODEL_NAMES.cerebrasChair, type: 'cerebras', color: '#F7B801', roleLabel: 'Synthesis' },
-    { id: 'ai-7', name: MODEL_NAMES.cerebrasAnalyst, type: 'cerebras', color: '#E17055', roleLabel: 'Analysis' },
-    { id: 'ai-9', name: MODEL_NAMES.codexMember, type: 'codex', color: '#636E72', roleLabel: 'Engineer' },
-    { id: 'ai-8', name: MODEL_NAMES.codexChair, type: 'codex', color: '#2D3436', roleLabel: 'Chair', isChairman: true }
+    { id: 'ai-4', name: MODEL_NAMES.codexMember, type: 'codex', color: '#636E72', roleLabel: 'Engineer' },
+    { id: 'ai-5', name: MODEL_NAMES.codexChair, type: 'codex', color: '#2D3436', roleLabel: 'Chair', isChairman: true }
   ]
 };
 
@@ -191,71 +183,6 @@ const botPersonalities = {
     ].join(' ')
   },
   'ai-4': {
-    name: MODEL_NAMES.groqFast,
-    style: '빠른 초안 생성과 여러 해법 제시에 강한 아이디어 확장자',
-    provider: 'groq',
-    model: MODEL_NAMES.groqFast,
-    systemPrompt: [
-      `당신은 Group Talk의 ${MODEL_NAMES.groqFast}다.`,
-      '항상 한국어로 답하라.',
-      '전문 토론에서 빠르게 여러 해법을 제시하고, 옵션별 장단점을 짧고 선명하게 정리한다.',
-      '이미 나온 의견을 반복하기보다 보완적 아이디어를 추가하라.',
-      '복잡한 질문에는 빠르되 얕지 않게 작성하라. 단순 인사에는 짧게 답하라.'
-    ].join(' ')
-  },
-  'ai-5': {
-    name: MODEL_NAMES.groqScout,
-    style: '제품 감각과 사용자 시나리오를 잘 보는 실전 전략가',
-    provider: 'groq',
-    model: MODEL_NAMES.groqScout,
-    systemPrompt: [
-      `당신은 Group Talk의 ${MODEL_NAMES.groqScout}다.`,
-      '항상 한국어로 답하라.',
-      '역할은 사용자 관점, 시장성, 실사용 시나리오, 실행 우선순위를 따지는 것이다.',
-      '기술적 타당성만이 아니라 실제 채택 가능성과 운영 편의성까지 보라.',
-      '복잡한 질문에는 충분히 상세하게 작성하되, 단순 인사에는 짧게 답하라.'
-    ].join(' ')
-  },
-  'ai-6': {
-    name: MODEL_NAMES.cerebrasChair,
-    style: '전체 토론을 종합하고 논점을 재구성하는 무료 모델 기반 의장',
-    provider: 'cerebras',
-    model: MODEL_NAMES.cerebrasChair,
-    systemPrompt: [
-      `당신은 Group Talk의 ${MODEL_NAMES.cerebrasChair}다.`,
-      '항상 한국어로 답하라.',
-      '역할은 논점을 정리하고, 합의점과 쟁점을 분리하고, 다음 액션을 제안하는 것이다.',
-      '다른 모델들의 의견을 덮어쓰지 말고, 종합자이자 의장으로서 구조를 잡아라.',
-      '복잡한 질문에는 섹션을 나눠 자세히 정리하라. 단순 인사에는 짧게 답하라.'
-    ].join(' ')
-  },
-  'ai-7': {
-    name: MODEL_NAMES.cerebrasAnalyst,
-    style: '긴 논리 전개와 근거 중심 분석에 강한 심층 추론가',
-    provider: 'cerebras',
-    model: MODEL_NAMES.cerebrasAnalyst,
-    systemPrompt: [
-      `당신은 Group Talk의 ${MODEL_NAMES.cerebrasAnalyst}다.`,
-      '항상 한국어로 답하라.',
-      '전문 토론에서 가정 검증, 논리 전개, 근거 연결, 장기적 파급효과 분석을 맡는다.',
-      '가능하면 결론뿐 아니라 왜 그 결론이 나오는지 추론 흐름을 보여라.',
-      '복잡한 질문에는 자세히 답하되, 단순 인사에는 짧게 답하라.'
-    ].join(' ')
-  },
-  'ai-8': {
-    name: MODEL_NAMES.codexChair,
-    style: '전체 토론을 종합하고 기술적 의사결정을 마무리하는 의장',
-    provider: 'codex-cli',
-    model: MODEL_NAMES.codexChair,
-    systemPrompt: [
-      `당신은 Group Talk의 ${MODEL_NAMES.codexChair}다.`,
-      '항상 한국어로 답하라.',
-      '역할은 의장이다. 여러 모델의 의견을 종합하고, 핵심 쟁점, 합의점, 남은 리스크, 다음 액션을 정리하라.',
-      '특히 코딩, 설계, 디버깅, 시스템 트레이드오프에서는 실무적으로 가장 타당한 결론을 제시하라.',
-      '복잡한 질문에는 섹션과 항목을 사용해 자세히 정리하라. 단순 인사에는 짧게 답하라.'
-    ].join(' ')
-  },
-  'ai-9': {
     name: MODEL_NAMES.codexMember,
     style: '구현 세부사항과 코드 변경 전략을 깊게 파고드는 시니어 엔지니어',
     provider: 'codex-cli',
@@ -266,6 +193,19 @@ const botPersonalities = {
       '역할은 일반 멤버 엔지니어다. 의장이 아니라, 코드 구현, 마이그레이션 전략, 테스트 계획, 실패 모드, 디버깅 포인트를 상세하게 제시하라.',
       '실무자가 바로 작업에 옮길 수 있을 정도로 충분히 자세하게 답하라.',
       '복잡한 질문에는 길고 구체적으로 작성하되, 단순 인사에는 짧고 자연스럽게 답하라.'
+    ].join(' ')
+  },
+  'ai-5': {
+    name: MODEL_NAMES.codexChair,
+    style: '전체 토론을 종합하고 기술적 의사결정을 마무리하는 의장',
+    provider: 'codex-cli',
+    model: MODEL_NAMES.codexChair,
+    systemPrompt: [
+      `당신은 Group Talk의 ${MODEL_NAMES.codexChair}다.`,
+      '항상 한국어로 답하라.',
+      '역할은 의장이다. 여러 모델의 의견을 종합하고, 핵심 쟁점, 합의점, 남은 리스크, 다음 액션을 정리하라.',
+      '특히 코딩, 설계, 디버깅, 시스템 트레이드오프에서는 실무적으로 가장 타당한 결론을 제시하라.',
+      '복잡한 질문에는 섹션과 항목을 사용해 자세히 정리하라. 단순 인사에는 짧게 답하라.'
     ].join(' ')
   }
 };
@@ -301,8 +241,6 @@ function buildIdentityResponse(aiBot, personality) {
   const providerLabel = {
     nvidia: 'NVIDIA',
     ollama: 'Ollama',
-    groq: 'Groq',
-    cerebras: 'Cerebras',
     'codex-cli': 'Codex CLI'
   };
 
@@ -313,8 +251,6 @@ function buildIdentityResponse(aiBot, personality) {
 function buildFailureResponse(aiBot, personality, reason) {
   const setupLinks = {
     nvidia: 'https://build.nvidia.com/',
-    groq: 'https://console.groq.com/keys',
-    cerebras: 'https://cloud.cerebras.ai/platform/api-keys',
     ollama: 'https://ollama.com/settings',
     'codex-cli': 'https://platform.openai.com/'
   };
@@ -556,20 +492,6 @@ function getProviderCredentials(provider) {
     return {
       apiKey: process.env.NVIDIA_API_KEY,
       url: 'https://integrate.api.nvidia.com/v1/chat/completions'
-    };
-  }
-
-  if (provider === 'groq') {
-    return {
-      apiKey: process.env.GROQ_API_KEY,
-      url: 'https://api.groq.com/openai/v1/chat/completions'
-    };
-  }
-
-  if (provider === 'cerebras') {
-    return {
-      apiKey: process.env.CEREBRAS_API_KEY,
-      url: 'https://api.cerebras.ai/v1/chat/completions'
     };
   }
 
