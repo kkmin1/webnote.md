@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOCX MD HTML Converter</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <p class="eyebrow">GitHub Pages Ready</p>
+      <h1>DOCX, Markdown, HTML을 브라우저 안에서 바로 변환합니다.</h1>
+      <p class="hero-copy">
+        서버 없이 동작하는 정적 앱입니다. DOCX는 브라우저 메모리에서만 읽고,
+        Markdown과 HTML 편집 결과를 그대로 다시 DOCX로 내보낼 수 있습니다.
+      </p>
+    </header>
+
+    <section class="toolbar">
+      <button id="docx-to-md" class="action primary">DOCX → Markdown</button>
+      <button id="docx-to-html" class="action primary">DOCX → HTML</button>
+      <button id="md-to-html" class="action accent">Markdown → HTML</button>
+      <button id="html-to-md" class="action accent">HTML → Markdown</button>
+      <button id="md-to-docx" class="action outline">Markdown → DOCX</button>
+      <button id="html-to-docx" class="action outline">HTML → DOCX</button>
+    </section>
+
+    <div id="status" class="status info" hidden></div>
+
+    <main class="workspace">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>DOCX</h2>
+            <p class="panel-copy">업로드한 파일을 Markdown 또는 HTML로 변환합니다.</p>
+          </div>
+          <span class="panel-badge">Input</span>
+        </div>
+
+        <label class="dropzone">
+          <input id="docx-file" type="file" accept=".docx">
+          <span class="drop-title">DOCX 파일을 끌어오거나 선택하세요</span>
+          <span class="drop-subtitle">현재는 한 번에 1개 파일씩 처리합니다.</span>
+        </label>
+
+        <div id="docx-selected" class="selected-files" hidden></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Markdown</h2>
+            <p class="panel-copy">직접 편집하거나 파일로 읽어들일 수 있습니다.</p>
+          </div>
+          <div class="panel-actions">
+            <button id="load-md" class="mini-button" type="button">파일 열기</button>
+            <button id="save-md" class="mini-button" type="button">파일 저장</button>
+          </div>
+        </div>
+
+        <textarea id="markdown-editor" class="editor" placeholder="# Markdown&#10;&#10;여기에 내용을 입력하세요."></textarea>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>HTML</h2>
+            <p class="panel-copy">정제된 HTML을 보고 수정한 뒤 DOCX로 저장할 수 있습니다.</p>
+          </div>
+          <div class="panel-actions">
+            <button id="load-html" class="mini-button" type="button">파일 열기</button>
+            <button id="save-html" class="mini-button" type="button">파일 저장</button>
+          </div>
+        </div>
+
+        <textarea id="html-editor" class="editor" placeholder="<h1>HTML</h1>"></textarea>
+      </section>
+    </main>
+
+    <section class="preview-grid">
+      <article class="preview-card">
+        <div class="preview-head">
+          <h3>HTML Preview</h3>
+          <span>sanitized render</span>
+        </div>
+        <div id="html-preview" class="preview-surface"></div>
+      </article>
+
+      <article class="preview-card">
+        <div class="preview-head">
+          <h3>Markdown Preview</h3>
+          <span>rendered from editor</span>
+        </div>
+        <div id="markdown-preview" class="preview-surface"></div>
+      </article>
+    </section>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
