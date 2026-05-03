@@ -22,7 +22,6 @@ function clearResults(node) {
 
 function appendResult(node, item, showPreview) {
   const fragment = template.content.cloneNode(true);
-  fragment.querySelector(".result-label").textContent = item.input_name;
   fragment.querySelector(".result-title").textContent = item.output_name;
 
   const button = fragment.querySelector(".download-link");
