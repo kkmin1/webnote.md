@@ -1,5 +1,9 @@
 const docxForm = document.getElementById("docx-form");
 const mdForm = document.getElementById("md-form");
+const docxFiles = document.getElementById("docx-files");
+const mdFiles = document.getElementById("md-files");
+const docxSelected = document.getElementById("docx-selected");
+const mdSelected = document.getElementById("md-selected");
 const docxStatus = document.getElementById("docx-status");
 const mdStatus = document.getElementById("md-status");
 const docxResults = document.getElementById("docx-results");
@@ -21,9 +25,10 @@ function appendResult(node, item, showPreview) {
   fragment.querySelector(".result-label").textContent = item.input_name;
   fragment.querySelector(".result-title").textContent = item.output_name;
 
-  const link = fragment.querySelector(".download-link");
-  link.href = item.download_url;
-  link.textContent = "파일 받기";
+  const button = fragment.querySelector(".download-link");
+  button.dataset.url = item.download_url;
+  button.dataset.filename = item.output_name;
+  button.textContent = "파일 저장";
 
   if (showPreview && item.preview) {
     const preview = fragment.querySelector(".preview");
@@ -32,6 +37,46 @@ function appendResult(node, item, showPreview) {
   }
 
   node.appendChild(fragment);
+}
+
+function updateSelectedFiles(input, container, label) {
+  const files = Array.from(input.files || []);
+  if (!files.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+
+  container.hidden = false;
+  const names = files.map((file) => file.name).join("<br>");
+  container.innerHTML = `<strong>${label}</strong>${names}`;
+}
+
+async function saveWithPicker(url, filename) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("파일을 가져오지 못했습니다.");
+  }
+
+  const blob = await response.blob();
+  if (window.showSaveFilePicker) {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+
+  const tempUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = tempUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(tempUrl);
 }
 
 async function submitForm(form, url, statusNode, resultsNode, showPreview) {
@@ -65,6 +110,28 @@ async function submitForm(form, url, statusNode, resultsNode, showPreview) {
     setStatus(statusNode, "error", error.message);
   }
 }
+
+docxFiles.addEventListener("change", () => {
+  updateSelectedFiles(docxFiles, docxSelected, "선택된 DOCX 파일");
+});
+
+mdFiles.addEventListener("change", () => {
+  updateSelectedFiles(mdFiles, mdSelected, "선택된 Markdown 파일");
+});
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".download-link");
+  if (!button) {
+    return;
+  }
+
+  try {
+    await saveWithPicker(button.dataset.url, button.dataset.filename);
+  } catch (error) {
+    const message = error && error.message ? error.message : "파일 저장에 실패했습니다.";
+    alert(message);
+  }
+});
 
 docxForm.addEventListener("submit", async (event) => {
   event.preventDefault();

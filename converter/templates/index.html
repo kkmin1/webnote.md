@@ -8,20 +8,10 @@
 </head>
 <body>
   <div class="page-shell">
-    <header class="hero">
-      <p class="eyebrow">Local Conversion Studio</p>
-      <h1>Docx와 Markdown을 오가는 작업을 한 화면에서 처리합니다.</h1>
-      <p class="hero-copy">
-        `docx -> md`는 MarkItDown으로, `md -> docx`는 Pandoc으로 변환합니다.
-        여러 파일 업로드와 결과 다운로드를 바로 지원합니다.
-      </p>
-    </header>
-
     <main class="workspace">
       <section class="panel">
         <div class="panel-header">
           <div>
-            <p class="panel-kicker">Direction A</p>
             <h2>DOCX to Markdown</h2>
           </div>
           <span class="panel-badge">MarkItDown</span>
@@ -33,6 +23,7 @@
             <span class="drop-title">DOCX 파일을 끌어오거나 선택하세요</span>
             <span class="drop-subtitle">여러 개를 한 번에 넣어도 됩니다.</span>
           </label>
+          <div id="docx-selected" class="selected-files" hidden></div>
           <button type="submit" class="action primary">Markdown으로 변환</button>
         </form>
 
@@ -43,29 +34,18 @@
       <section class="panel">
         <div class="panel-header">
           <div>
-            <p class="panel-kicker">Direction B</p>
             <h2>Markdown to DOCX</h2>
           </div>
           <span class="panel-badge warm">Pandoc</span>
         </div>
 
         <form id="md-form" class="stack">
-          <label class="field">
-            <span>출력 파일 이름</span>
-            <input id="md-filename" name="filename" type="text" value="converted-note">
-          </label>
-
-          <label class="dropzone compact">
+          <label class="dropzone">
             <input id="md-files" type="file" name="files" accept=".md,.markdown" multiple>
-            <span class="drop-title">Markdown 파일 업로드</span>
-            <span class="drop-subtitle">또는 아래 편집기에 직접 붙여넣으세요.</span>
+            <span class="drop-title">Markdown 파일을 끌어오거나 선택하세요</span>
+            <span class="drop-subtitle">여러 개를 한 번에 넣어도 됩니다.</span>
           </label>
-
-          <label class="field">
-            <span>직접 입력</span>
-            <textarea id="markdown-text" name="markdown_text" placeholder="# 제목&#10;&#10;여기에 Markdown을 입력하세요."></textarea>
-          </label>
-
+          <div id="md-selected" class="selected-files" hidden></div>
           <button type="submit" class="action accent">DOCX로 변환</button>
         </form>
 
@@ -82,7 +62,7 @@
           <p class="result-label"></p>
           <h3 class="result-title"></h3>
         </div>
-        <a class="download-link" target="_blank" rel="noopener">다운로드</a>
+        <button type="button" class="download-link">파일 저장</button>
       </div>
       <pre class="preview" hidden></pre>
     </article>
