@@ -31,34 +31,6 @@ body {
   padding: 42px 0 56px;
 }
 
-.hero {
-  padding: 12px 4px 22px;
-}
-
-.eyebrow {
-  margin: 0 0 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.hero h1 {
-  margin: 0 0 16px;
-  max-width: 14ch;
-  line-height: 0.96;
-  font-size: clamp(2.4rem, 4.6vw, 4.8rem);
-}
-
-.hero-copy {
-  margin: 0;
-  max-width: 760px;
-  font-size: 1rem;
-  line-height: 1.72;
-  color: var(--muted);
-}
-
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -314,9 +286,5 @@ body {
 
   .preview-grid {
     grid-template-columns: 1fr;
-  }
-
-  .hero h1 {
-    max-width: none;
   }
 }
