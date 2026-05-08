@@ -117,7 +117,7 @@ function insertTableAt(p) {
   saveState();
   const o = makeNewObj('table', p);
   objects.push(o); selId = o.id;
-  switchTool('select'); render(); syncProps();
+  switchTool('select'); render(); syncProps(); ensureObjVisible(o);
 }
 
 function scalePointInBox(px, py, from, to) {
@@ -181,6 +181,19 @@ function currentPointerCanvasPoint() {
     x: (pointerClient.x - r.left) / zoom,
     y: (pointerClient.y - r.top) / zoom,
   };
+}
+
+function ensureObjVisible(o) {
+  const bb = bbox(o);
+  if (!bb) return;
+  const vx1 = cvScroll.scrollLeft / zoom;
+  const vy1 = cvScroll.scrollTop / zoom;
+  const vx2 = (cvScroll.scrollLeft + cvScroll.clientWidth) / zoom;
+  const vy2 = (cvScroll.scrollTop + cvScroll.clientHeight) / zoom;
+  const fullyVisible = bb.x >= vx1 && bb.y >= vy1 && bb.x + bb.w <= vx2 && bb.y + bb.h <= vy2;
+  if (fullyVisible) return;
+  cvScroll.scrollLeft = Math.max(0, (bb.x + bb.w / 2) * zoom - cvScroll.clientWidth / 2);
+  cvScroll.scrollTop = Math.max(0, (bb.y + bb.h / 2) * zoom - cvScroll.clientHeight / 2);
 }
 
 document.addEventListener('pointermove', e => {
