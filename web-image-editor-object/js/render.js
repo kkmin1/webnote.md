@@ -154,11 +154,15 @@ function render() {
   objects.forEach(o => {
     const el = makeEl(o); if (!el) return;
     el.dataset.oid = o.id;
-    if (o.id === selId) el.setAttribute('filter', 'url(#sel-shadow)');
+    if (o.id === selId && !hasForeignObject(el)) el.setAttribute('filter', 'url(#sel-shadow)');
     cvSvg.appendChild(el);
   });
   if (selId) { const o = getObj(selId); if (o) drawHandles(o); }
   updateSB();
+}
+
+function hasForeignObject(el) {
+  return el.localName === 'foreignObject' || !!el.querySelector?.('foreignObject');
 }
 
 function makeEl(o) {
