@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KS 이미지 에디터</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── 툴바 ── -->
+<div id="tb">
+  <span class="logo">KS 이미지 에디터</span>
+  <div class="sep"></div>
+
+  <!-- 파일 저장 드롭다운 -->
+  <div class="tb-dropdown">
+    <button class="tbtn dropdown-btn" id="btn-save-menu">💾 저장 ▾</button>
+    <div class="dropdown-panel" id="save-panel">
+      <div class="dp-item" id="save-gtree">
+        <span class="dp-icon">📋</span>
+        <span class="dp-text">
+          <strong>.gtree</strong>
+          <small>편집 가능 — 나중에 다시 수정 가능</small>
+        </span>
+      </div>
+      <div class="dp-divider"></div>
+      <div class="dp-item" id="save-svg">
+        <span class="dp-icon">🔷</span>
+        <span class="dp-text">
+          <strong>SVG</strong>
+          <small>벡터 이미지 — 크기 변환 자유</small>
+        </span>
+      </div>
+      <div class="dp-item" id="save-tex">
+        <span class="dp-icon">🧮</span>
+        <span class="dp-text">
+          <strong>TeX (TikZ)</strong>
+          <small>LaTeX TikZ 코드로 저장</small>
+        </span>
+      </div>
+      <div class="dp-item" id="save-wtikz">
+        <span class="dp-icon">🧷</span>
+        <span class="dp-text">
+          <strong>WTIKZ</strong>
+          <small>web-tikz에서 다시 편집</small>
+        </span>
+      </div>
+      <div class="dp-item" id="save-png">
+        <span class="dp-icon">🖼</span>
+        <span class="dp-text">
+          <strong>PNG</strong>
+          <small>투명 배경 지원 (2× 해상도)</small>
+        </span>
+      </div>
+      <div class="dp-item" id="save-jpg">
+        <span class="dp-icon">📷</span>
+        <span class="dp-text">
+          <strong>JPG</strong>
+          <small>파일 크기 작음, 배경 흰색</small>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 파일 불러오기 드롭다운 -->
+  <div class="tb-dropdown">
+    <button class="tbtn dropdown-btn" id="btn-load-menu">📂 불러오기 ▾</button>
+    <div class="dropdown-panel" id="load-panel">
+      <div class="dp-item" id="load-gtree">
+        <span class="dp-icon">📋</span>
+        <span class="dp-text">
+          <strong>.gtree</strong>
+          <small>편집 가능 파일 불러오기</small>
+        </span>
+      </div>
+      <div class="dp-divider"></div>
+      <div class="dp-item" id="load-image">
+        <span class="dp-icon">🖼</span>
+        <span class="dp-text">
+          <strong>이미지 (PNG / JPG)</strong>
+          <small>캔버스에 오브젝트로 삽입</small>
+        </span>
+      </div>
+      <div class="dp-item" id="load-svg">
+        <span class="dp-icon">🔷</span>
+        <span class="dp-text">
+          <strong>SVG</strong>
+          <small>SVG를 이미지로 삽입</small>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 숨겨진 파일 인풋들 -->
+  <input type="file" id="file-gtree"  accept=".gtree,.json" style="display:none">
+  <input type="file" id="file-image"  accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+  <input type="file" id="file-svg"    accept=".svg,image/svg+xml" style="display:none">
+
+  <div class="sep"></div>
+  <button class="tbtn" id="btn-undo">↩ 취소</button>
+  <button class="tbtn" id="btn-redo">↪ 재실행</button>
+  <div class="sep"></div>
+  <button class="tbtn" id="btn-copy">⎘ 복사</button>
+  <button class="tbtn" id="btn-paste">📋 붙여넣기</button>
+  <div class="sep"></div>
+  <div class="tb-group" title="레이어 순서: 겹치는 도형의 앞/뒤 순서를 바꿉니다">
+    <button class="tbtn" id="btn-front">⬆ 앞 레이어</button>
+    <button class="tbtn" id="btn-back">⬇ 뒤 레이어</button>
+  </div>
+  <div class="sep"></div>
+  <button class="tbtn danger" id="btn-clear">🗑 전체삭제</button>
+</div>
+
+<!-- ── 메인 3열 ── -->
+<div id="main">
+
+  <!-- 왼쪽 패널 -->
+  <div class="panel" id="lpanel">
+    <div class="panel-scroll">
+
+      <div class="lsec">
+        <div class="sec-t">도구</div>
+        <div class="tgrid">
+          <div class="ti on" data-tool="select">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 1l11 7-5 1-3 6z" fill="currentColor"/></svg>선택
+          </div>
+          <div class="ti" data-tool="text">
+            <svg width="16" height="16" viewBox="0 0 16 16"><text x="2" y="13" font-size="13" font-weight="700" fill="currentColor">T</text></svg>텍스트
+          </div>
+          <div class="ti" data-tool="circle">
+            <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>원
+          </div>
+          <div class="ti" data-tool="ellipse">
+            <svg width="16" height="16" viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="7" ry="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>타원
+          </div>
+          <div class="ti" data-tool="rect">
+            <svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>사각형
+          </div>
+          <div class="ti" data-tool="line">
+            <svg width="16" height="16" viewBox="0 0 16 16"><line x1="1" y1="15" x2="15" y2="1" stroke="currentColor" stroke-width="1.5"/></svg>직선
+          </div>
+          <div class="ti" data-tool="arrow">
+            <svg width="16" height="16" viewBox="0 0 16 16"><line x1="1" y1="13" x2="12" y2="3" stroke="currentColor" stroke-width="1.5"/><polygon points="12,3 8,4 11,7" fill="currentColor"/></svg>화살표
+          </div>
+          <div class="ti" data-tool="dashed">
+            <svg width="16" height="16" viewBox="0 0 16 16"><line x1="1" y1="15" x2="15" y2="1" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3,2"/></svg>점선
+          </div>
+          <div class="ti" data-tool="dashed-arrow">
+            <svg width="16" height="16" viewBox="0 0 16 16"><line x1="1" y1="13" x2="12" y2="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3,2"/><polygon points="12,3 8,4 11,7" fill="currentColor"/></svg>점선↗
+          </div>
+          <div class="ti" data-tool="freehand">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M1 12 C4 4, 7 15, 10 8 S14 4, 15 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>자유곡선
+          </div>
+          <div class="ti" data-tool="quadratic">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M1 12 Q8 1, 15 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>2차곡선
+          </div>
+          <div class="ti" data-tool="cubic">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M1 12 C4 2, 12 2, 15 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>3차곡선
+          </div>
+        </div>
+      </div>
+
+      <div class="lsec">
+        <div class="sec-t">기본 스타일</div>
+        <div class="prow"><label>선 색</label><input type="color" id="d-stroke" value="#2c2c2a"></div>
+        <div class="prow"><label>채우기</label><input type="color" id="d-fill" value="#ffffff"><button class="fnone" id="d-fnone">없음</button></div>
+        <div class="prow"><label>채우기 투명도</label><input type="range" id="d-fill-op" min="0" max="100" step="5" value="100"><span class="pval" id="d-fill-op-v">100</span></div>
+        <div class="prow"><label>선 굵기</label><input type="range" id="d-sw" min="0.5" max="8" step="0.5" value="1.5"><span class="pval" id="d-sw-v">1.5</span></div>
+        <div class="prow"><label>글자색</label><input type="color" id="d-tc" value="#1a1a18"></div>
+        <div class="prow"><label>글자크기</label><input type="number" id="d-fs" value="14" min="7" max="72"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="resizer" id="resizer-l"></div>
+
+  <!-- 캔버스 -->
+  <div id="cv">
+    <div id="cv-scroll">
+      <div id="cv-inner">
+        <svg id="grid-svg" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="gp" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M20 0H0V20" fill="none" stroke="#d8d5ce" stroke-width="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#gp)"/>
+        </svg>
+        <svg id="cv-svg" xmlns="http://www.w3.org/2000/svg">
+          <defs id="svg-defs"></defs>
+        </svg>
+        <input type="text" id="txt-inp" placeholder="입력 후 Enter">
+        <div id="cv-resize-handle">
+          <svg width="16" height="16" viewBox="0 0 16 16">
+            <path d="M15 1L1 15M15 7L7 15M15 13L13 15" stroke="#888" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <div id="zoom-bar">
+      <button class="zbtn" id="zoom-out">−</button>
+      <span id="zoom-label">100%</span>
+      <button class="zbtn" id="zoom-in">+</button>
+      <button class="zbtn" id="zoom-fit" style="font-size:11px">맞춤</button>
+      <button class="zbtn" id="zoom-reset" style="font-size:11px">1:1</button>
+    </div>
+  </div>
+
+  <div class="resizer" id="resizer-r"></div>
+
+  <!-- 오른쪽 패널 -->
+  <div class="panel" id="rpanel">
+    <div class="panel-scroll">
+
+      <div id="r-nosel" class="no-sel">
+        오브젝트를 클릭해<br>선택하세요<br><br>
+        <span style="font-size:10px;line-height:2.2">
+          클릭 → 선택 &amp; 핸들<br>
+          핸들 드래그 → 크기 조절<br>
+          내부 드래그 → 이동<br>
+          더블클릭 → 텍스트 편집<br>
+          Del → 삭제 | Ctrl+Z → 취소
+        </span>
+      </div>
+
+      <div id="r-sel" style="display:none">
+
+        <div class="rsec"><span class="obj-badge" id="r-badge">원</span></div>
+
+        <div class="rsec" id="r-line-sec">
+          <div class="sec-t">선</div>
+          <div class="rrow"><label>색상</label><input type="color" id="r-stroke"></div>
+          <div class="rrow"><label>굵기</label><input type="range" id="r-sw" min="0.5" max="10" step="0.5"><span class="rval" id="r-sw-v"></span></div>
+          <div class="sbrow">
+            <button class="sbtn on" id="r-solid">실선</button>
+            <button class="sbtn" id="r-dashed">점선</button>
+            <button class="sbtn" id="r-dotted">점점</button>
+          </div>
+          <div class="sbrow">
+            <button class="sbtn on" id="r-no-arr">화살없음</button>
+            <button class="sbtn" id="r-end-arr">끝→</button>
+            <button class="sbtn" id="r-both-arr">↔양방향</button>
+          </div>
+        </div>
+
+        <div class="rsec" id="r-fill-sec">
+          <div class="sec-t">채우기</div>
+          <div class="rrow"><label>색상</label><input type="color" id="r-fill"><button class="rfnone" id="r-fnone">없음</button></div>
+          <div class="rrow"><label>채우기<br>투명도</label><input type="range" id="r-fill-op" min="0" max="100" step="5"><span class="rval" id="r-fill-op-v">100</span></div>
+        </div>
+
+        <div class="rsec" id="r-obj-op-sec">
+          <div class="sec-t">전체 투명도</div>
+          <div class="rrow"><label>오브젝트</label><input type="range" id="r-op" min="0" max="100" step="5" value="100"><span class="rval" id="r-op-v">100</span></div>
+        </div>
+
+        <div class="rsec" id="r-text-sec">
+          <div class="sec-t">텍스트</div>
+          <div class="rrow"><label>내용</label><input type="text" id="r-txt"></div>
+          <div class="rrow"><label>크기</label><input type="number" id="r-fs" min="7" max="72"></div>
+          <div class="rrow"><label>색상</label><input type="color" id="r-tc"></div>
+          <div class="sbrow">
+            <button class="sbtn" id="r-bold" style="font-weight:700">B</button>
+            <button class="sbtn" id="r-italic" style="font-style:italic">I</button>
+            <button class="sbtn on" data-align="middle" id="r-al-m">중</button>
+            <button class="sbtn" data-align="start"  id="r-al-s">좌</button>
+            <button class="sbtn" data-align="end"    id="r-al-e">우</button>
+          </div>
+        </div>
+
+        <div class="rsec" id="r-geo-sec">
+          <div class="sec-t">위치 / 크기</div>
+          <div class="rrow">
+            <label>X</label><input type="number" id="r-x" step="1">
+            <label style="width:14px;text-align:center;flex-shrink:0">Y</label>
+            <input type="number" id="r-y" step="1">
+          </div>
+          <div class="rrow" id="r-wh-row">
+            <label>W</label><input type="number" id="r-w" step="1">
+            <label style="width:14px;text-align:center;flex-shrink:0">H</label>
+            <input type="number" id="r-h" step="1">
+          </div>
+        </div>
+
+        <div class="rsec">
+          <button class="delbtn" id="r-del">🗑 삭제</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 상태바 ── -->
+<div id="sb">
+  <span id="sb-tool">도구: 선택</span>
+  <span id="sb-cnt">오브젝트: 0</span>
+  <span id="sb-sel">선택: 없음</span>
+  <span id="sb-xy">x:0 y:0</span>
+  <span class="hint">S:선택 | C:원 | E:타원 | R:사각형 | L:직선 | A:화살표 | T:텍스트 | Ctrl+휠:줌</span>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/render.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/io.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
