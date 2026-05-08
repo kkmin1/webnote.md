@@ -13,6 +13,7 @@
  * 사각형: x,y,w,h,rx
  * 텍스트: x,y,text,fs,tc,bold,italic,align
  * 이미지: x,y,w,h,href(base64)
+ * 표: x,y,rows,cols,colWidths[],rowHeights[],cells[][], stroke, sw, fill, fillNone, fillOpacity, fs, tc
  * 폴리라인: points[[x,y],...], stroke, sw, dash
  * 스플라인: points[[x,y],...], stroke, sw, dash
  * 2차곡선: x1,y1,cx1,cy1,x2,y2, stroke, sw, dash
@@ -45,6 +46,8 @@ function isLine(o) { return ['line','arrow','dashed','dashed-arrow','bidir'].inc
 function isPointShape(o) { return ['polyline','polygon','bezier'].includes(o.type); }
 function isCurveShape(o) { return ['quadratic','cubic'].includes(o.type); }
 function getObj(id) { return objects.find(o => o.id === id) || null; }
+function tableW(o) { return (o.colWidths || []).reduce((sum, v) => sum + (Number(v) || 0), 0); }
+function tableH(o) { return (o.rowHeights || []).reduce((sum, v) => sum + (Number(v) || 0), 0); }
 
 function bbox(o) {
   if (!o) return null;
@@ -52,6 +55,7 @@ function bbox(o) {
   if (o.type === 'ellipse') return { x: o.cx-o.rx, y: o.cy-o.ry, w: o.rx*2, h: o.ry*2 };
   if (o.type === 'arc')     return { x: o.cx-o.rx, y: o.cy-o.ry, w: o.rx*2, h: o.ry*2 };
   if (o.type === 'rect' || o.type === 'image') return { x: o.x, y: o.y, w: o.w, h: o.h };
+  if (o.type === 'table') return { x: o.x, y: o.y, w: tableW(o), h: tableH(o) };
   if (o.type === 'quadratic') {
     const xs = [o.x1, o.cx1, o.x2], ys = [o.y1, o.cy1, o.y2];
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs)-Math.min(...xs)||1, h: Math.max(...ys)-Math.min(...ys)||1 };
@@ -89,7 +93,7 @@ function hitTest(px, py) {
 
 function moveObj(o, dx, dy) {
   if (o.type==='circle'||o.type==='ellipse'||o.type==='arc') { o.cx+=dx; o.cy+=dy; }
-  else if (o.type==='rect'||o.type==='image'||o.type==='text') { o.x+=dx; o.y+=dy; }
+  else if (o.type==='rect'||o.type==='image'||o.type==='text'||o.type==='table') { o.x+=dx; o.y+=dy; }
   else if (o.type==='quadratic') { o.x1+=dx; o.y1+=dy; o.cx1+=dx; o.cy1+=dy; o.x2+=dx; o.y2+=dy; }
   else if (o.type==='cubic') { o.x1+=dx; o.y1+=dy; o.cx1+=dx; o.cy1+=dy; o.cx2+=dx; o.cy2+=dy; o.x2+=dx; o.y2+=dy; }
   else if (isPointShape(o)) { o.points = (o.points || []).map(([x,y]) => [x+dx, y+dy]); }
@@ -98,7 +102,7 @@ function moveObj(o, dx, dy) {
 
 function copyPos(dst, src) {
   if (src.type==='circle'||src.type==='ellipse'||src.type==='arc') { dst.cx=src.cx; dst.cy=src.cy; }
-  else if (src.type==='rect'||src.type==='image'||src.type==='text') { dst.x=src.x; dst.y=src.y; }
+  else if (src.type==='rect'||src.type==='image'||src.type==='text'||src.type==='table') { dst.x=src.x; dst.y=src.y; }
   else if (src.type==='quadratic') { dst.x1=src.x1; dst.y1=src.y1; dst.cx1=src.cx1; dst.cy1=src.cy1; dst.x2=src.x2; dst.y2=src.y2; }
   else if (src.type==='cubic') { dst.x1=src.x1; dst.y1=src.y1; dst.cx1=src.cx1; dst.cy1=src.cy1; dst.cx2=src.cx2; dst.cy2=src.cy2; dst.x2=src.x2; dst.y2=src.y2; }
   else if (isPointShape(src)) { dst.points = JSON.parse(JSON.stringify(src.points || [])); }

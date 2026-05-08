@@ -3,8 +3,11 @@
  */
 
 const txtInp = document.getElementById('txt-inp');
-const TOOL_LABEL = { select:'선택', text:'텍스트', circle:'원', ellipse:'타원', rect:'사각형', line:'직선', arrow:'화살표', dashed:'점선', 'dashed-arrow':'점선↗', bidir:'양방향', freehand:'자유곡선', quadratic:'2차곡선', cubic:'3차곡선' };
-const TYPE_NAME  = { circle:'원', ellipse:'타원', arc:'호', rect:'사각형', line:'직선', arrow:'화살표', dashed:'점선', 'dashed-arrow':'점선↗', bidir:'양방향', text:'텍스트', image:'이미지', polyline:'연속선', polygon:'다각형', freehand:'자유곡선', bezier:'스플라인', quadratic:'2차곡선', cubic:'3차곡선' };
+const TOOL_LABEL = { select:'선택', text:'텍스트', circle:'원', ellipse:'타원', rect:'사각형', table:'표', line:'직선', arrow:'화살표', dashed:'점선', 'dashed-arrow':'점선↗', bidir:'양방향', freehand:'자유곡선', quadratic:'2차곡선', cubic:'3차곡선' };
+const TYPE_NAME  = { circle:'원', ellipse:'타원', arc:'호', rect:'사각형', table:'표', line:'직선', arrow:'화살표', dashed:'점선', 'dashed-arrow':'점선↗', bidir:'양방향', text:'텍스트', image:'이미지', polyline:'연속선', polygon:'다각형', freehand:'자유곡선', bezier:'스플라인', quadratic:'2차곡선', cubic:'3차곡선' };
+const TABLE_MAX = 10;
+let lastSvgPos = null;
+let lastTableClick = null;
 
 function defaultQuadraticControl(p0, p) {
   const mx = (p0.x + p.x) / 2;
@@ -46,6 +49,76 @@ function resizeBoxFromHandle(snap, h, dx, dy) {
   return { x, y, w: Math.max(4, w), h: Math.max(4, sh) };
 }
 
+function clampInt(v, min, max) {
+  return Math.max(min, Math.min(max, parseInt(v) || min));
+}
+
+function tableCellAt(o, p) {
+  if (!o || o.type !== 'table') return null;
+  const bb = bbox(o);
+  if (!bb || p.x < bb.x || p.x > bb.x + bb.w || p.y < bb.y || p.y > bb.y + bb.h) return null;
+  let x = o.x;
+  for (let c = 0; c < o.cols; c++) {
+    const w = o.colWidths[c] || 0;
+    let y = o.y;
+    for (let r = 0; r < o.rows; r++) {
+      const h = o.rowHeights[r] || 0;
+      if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h) return { r, c, x, y, w, h };
+      y += h;
+    }
+    x += w;
+  }
+  return null;
+}
+
+function tableEdgeAt(o, p) {
+  if (!o || o.type !== 'table') return null;
+  const bb = bbox(o);
+  if (!bb) return null;
+  const tol = 5;
+  let x = o.x;
+  for (let c = 1; c < o.cols; c++) {
+    x += o.colWidths[c - 1] || 0;
+    if (Math.abs(p.x - x) <= tol && p.y >= bb.y && p.y <= bb.y + bb.h) return { kind:'col', index:c };
+  }
+  let y = o.y;
+  for (let r = 1; r < o.rows; r++) {
+    y += o.rowHeights[r - 1] || 0;
+    if (Math.abs(p.y - y) <= tol && p.x >= bb.x && p.x <= bb.x + bb.w) return { kind:'row', index:r };
+  }
+  return null;
+}
+
+function syncTableSize(o) {
+  o.cols = clampInt(o.cols, 1, TABLE_MAX);
+  o.rows = clampInt(o.rows, 1, TABLE_MAX);
+  o.colWidths = (o.colWidths || []).slice(0, o.cols);
+  o.rowHeights = (o.rowHeights || []).slice(0, o.rows);
+  while (o.colWidths.length < o.cols) o.colWidths.push(70);
+  while (o.rowHeights.length < o.rows) o.rowHeights.push(34);
+  o.cells = (o.cells || []).slice(0, o.rows);
+  while (o.cells.length < o.rows) o.cells.push([]);
+  o.cells = o.cells.map(row => {
+    const next = (row || []).slice(0, o.cols);
+    while (next.length < o.cols) next.push('');
+    return next;
+  });
+}
+
+function setTableUniformCells(o, cellW, cellH) {
+  const w = Math.max(12, parseInt(cellW) || 12);
+  const h = Math.max(10, parseInt(cellH) || 10);
+  o.colWidths = Array.from({ length:o.cols }, () => w);
+  o.rowHeights = Array.from({ length:o.rows }, () => h);
+}
+
+function insertTableAt(p) {
+  saveState();
+  const o = makeNewObj('table', p);
+  objects.push(o); selId = o.id;
+  switchTool('select'); render(); syncProps();
+}
+
 function scalePointInBox(px, py, from, to) {
   const sx = from.w ? (px - from.x) / from.w : 0.5;
   const sy = from.h ? (py - from.y) / from.h : 0.5;
@@ -77,6 +150,11 @@ function scaleArcShape(o, snap, h, dx, dy) {
 
 /* ── 도구 전환 ── */
 function switchTool(t) {
+  if (t === 'table') {
+    const p = lastSvgPos || visibleCanvasCenter();
+    insertTableAt(p);
+    return;
+  }
   tool = t;
   document.querySelectorAll('.ti').forEach(x => x.classList.remove('on'));
   document.querySelector(`.ti[data-tool="${t}"]`)?.classList.add('on');
@@ -84,22 +162,61 @@ function switchTool(t) {
   document.getElementById('sb-tool').textContent = '도구: ' + (TOOL_LABEL[t] || t);
 }
 
+function visibleCanvasCenter() {
+  return {
+    x: (cvScroll.scrollLeft + cvScroll.clientWidth / 2) / zoom,
+    y: (cvScroll.scrollTop + cvScroll.clientHeight / 2) / zoom,
+  };
+}
+
 /* ── 포인터 이벤트 ── */
 cvSvg.addEventListener('pointerdown', onDown);
 cvSvg.addEventListener('pointermove', onMove);
 cvSvg.addEventListener('pointerup',   onUp);
+cvSvg.addEventListener('click',       onClick);
 cvSvg.addEventListener('dblclick',    onDbl);
+
+function onClick(e) {
+  if (tool !== 'select') return;
+  const p = svgPt(e), hit = hitTest(p.x, p.y);
+  if (!hit || hit.type !== 'table') { lastTableClick = null; return; }
+  const now = Date.now();
+  const prev = lastTableClick;
+  lastTableClick = { id:hit.id, x:p.x, y:p.y, t:now };
+  if (prev && prev.id === hit.id && now - prev.t < 450 && Math.hypot(p.x - prev.x, p.y - prev.y) < 6) {
+    openTableCellInput(e.clientX, e.clientY, hit, p);
+    lastTableClick = null;
+  }
+}
 
 function onDown(e) {
   if (e.button !== 0) return;
   cvSvg.setPointerCapture(e.pointerId);
   const p = svgPt(e);
+  lastSvgPos = p;
 
   if (tool === 'select') {
+    if (e.detail >= 2) {
+      const hit = hitTest(p.x, p.y);
+      if (hit && hit.type === 'table') {
+        selId = hit.id; render(); syncProps();
+        openTableCellInput(e.clientX, e.clientY, hit, p);
+        return;
+      }
+    }
     const hEl = e.target.closest('[data-handle]');
     if (hEl) {
       dragMode = 'handle'; activeHandle = hEl.getAttribute('data-handle');
       dragP0 = p; dragSnap = JSON.parse(JSON.stringify(getObj(selId)));
+      saveState(); return;
+    }
+    const edgeEl = e.target.closest('[data-table-edge]');
+    const sel = getObj(selId);
+    const edge = edgeEl ? { kind:edgeEl.getAttribute('data-table-edge'), index:parseInt(edgeEl.getAttribute('data-index')) } : tableEdgeAt(sel, p);
+    if (sel && sel.type === 'table' && edge) {
+      dragMode = edge.kind === 'col' ? 'table-col' : 'table-row';
+      activeHandle = edge.index;
+      dragP0 = p; dragSnap = JSON.parse(JSON.stringify(sel));
       saveState(); return;
     }
     const hit = hitTest(p.x, p.y);
@@ -118,15 +235,24 @@ function onDown(e) {
 
 function onMove(e) {
   const p = svgPt(e);
+  lastSvgPos = p;
   document.getElementById('sb-xy').textContent = `x:${Math.round(p.x)} y:${Math.round(p.y)}`;
   if (dragMode==='handle' && dragSnap && selId) { const o=getObj(selId); if(o) applyHandle(o,dragSnap,activeHandle,p); render(); syncProps(); return; }
   if (dragMode==='move'   && dragSnap && selId) { const o=getObj(selId); if(!o) return; copyPos(o,dragSnap); moveObj(o,p.x-dragP0.x,p.y-dragP0.y); render(); syncProps(); return; }
+  if ((dragMode==='table-col'||dragMode==='table-row') && dragSnap && selId) { const o=getObj(selId); if(o) applyTableEdge(o,dragSnap,activeHandle,p); render(); syncProps(); return; }
   if (drawing && drawObj) { updateDrawing(drawObj, drawP0, p); render(); }
 }
 
 function onUp(e) {
   cvSvg.releasePointerCapture(e.pointerId);
-  if (dragMode) { dragMode=null; dragP0=null; dragSnap=null; activeHandle=null; render(); syncProps(); return; }
+  if (dragMode) {
+    const p = svgPt(e);
+    const moved = dragP0 ? Math.hypot(p.x - dragP0.x, p.y - dragP0.y) : 99;
+    const clickedTable = dragMode === 'move' && dragSnap && dragSnap.type === 'table' && moved < 3 ? getObj(selId) : null;
+    dragMode=null; dragP0=null; dragSnap=null; activeHandle=null; render(); syncProps();
+    if (clickedTable) detectTableDoubleClick(e, clickedTable, p);
+    return;
+  }
   if (drawing) {
     drawing = false;
     if (drawObj && isDegenerate(drawObj)) { objects=objects.filter(o=>o.id!==drawObj.id); undoStack.pop(); selId=null; }
@@ -135,9 +261,20 @@ function onUp(e) {
   }
 }
 
+function detectTableDoubleClick(e, table, p) {
+  const now = Date.now();
+  const prev = lastTableClick;
+  lastTableClick = { id:table.id, x:p.x, y:p.y, t:now };
+  if (prev && prev.id === table.id && now - prev.t < 450 && Math.hypot(p.x - prev.x, p.y - prev.y) < 6) {
+    openTableCellInput(e.clientX, e.clientY, table, p);
+    lastTableClick = null;
+  }
+}
+
 function onDbl(e) {
   const p = svgPt(e), hit = hitTest(p.x, p.y);
   if (hit && hit.type==='text') openTextInput(e.clientX, e.clientY, hit.x, hit.y, hit);
+  if (hit && hit.type==='table') openTableCellInput(e.clientX, e.clientY, hit, p);
 }
 
 /* ── 핸들 리사이즈 ── */
@@ -163,11 +300,37 @@ function applyHandle(o, snap, h, p) {
     let{x,y,w,h:sh}=resizeBoxFromHandle({x:snap.x,y:snap.y,w:snap.w,h:snap.h},h,dx,dy);
     o.x=x;o.y=y;o.w=Math.max(4,w);o.h=Math.max(4,sh); return;
   }
+  if (o.type==='table') {
+    let{x,y,w,h:sh}=resizeBoxFromHandle({x:snap.x,y:snap.y,w:tableW(snap),h:tableH(snap)},h,dx,dy);
+    o.x=x;o.y=y;
+    const sx=w/tableW(snap), sy=sh/tableH(snap);
+    o.colWidths=(snap.colWidths||[]).map(v=>Math.max(12,v*sx));
+    o.rowHeights=(snap.rowHeights||[]).map(v=>Math.max(10,v*sy));
+    return;
+  }
   if (o.type==='circle') { o.r=Math.max(4,Math.max(Math.abs(p.x-snap.cx),Math.abs(p.y-snap.cy))); return; }
   if (o.type==='ellipse') {
     if(h==='ml'||h==='mr') o.rx=Math.max(4,Math.abs(p.x-snap.cx));
     else if(h==='tc'||h==='bc') o.ry=Math.max(4,Math.abs(p.y-snap.cy));
     else{o.rx=Math.max(4,Math.abs(p.x-snap.cx));o.ry=Math.max(4,Math.abs(p.y-snap.cy));}
+  }
+}
+
+function applyTableEdge(o, snap, index, p) {
+  if (dragMode === 'table-col') {
+    const dx = p.x - dragP0.x;
+    o.colWidths = [...snap.colWidths];
+    const left = Math.max(12, (snap.colWidths[index - 1] || 12) + dx);
+    const right = Math.max(12, (snap.colWidths[index] || 12) - dx);
+    o.colWidths[index - 1] = left;
+    o.colWidths[index] = right;
+  } else {
+    const dy = p.y - dragP0.y;
+    o.rowHeights = [...snap.rowHeights];
+    const top = Math.max(10, (snap.rowHeights[index - 1] || 10) + dy);
+    const bottom = Math.max(10, (snap.rowHeights[index] || 10) - dy);
+    o.rowHeights[index - 1] = top;
+    o.rowHeights[index] = bottom;
   }
 }
 
@@ -178,6 +341,7 @@ function makeNewObj(type, p) {
   if(type==='circle')       return{...base,cx:p.x,cy:p.y,r:2};
   if(type==='ellipse')      return{...base,cx:p.x,cy:p.y,rx:2,ry:2};
   if(type==='rect')         return{...base,x:p.x,y:p.y,w:2,h:2,rx:3};
+  if(type==='table')        return{...base,type:'table',x:p.x,y:p.y,rows:5,cols:5,colWidths:Array(5).fill(70),rowHeights:Array(5).fill(34),cells:Array.from({length:5},()=>Array(5).fill('')),fs:D.fs,tc:D.tc};
   if(type==='freehand')     return{id,type:'polyline',points:[[p.x,p.y]],stroke:D.stroke,sw:D.sw,dash:'none',arrow:'none',opacity:1};
   if(type==='quadratic')    return{id,type:'quadratic',x1:p.x,y1:p.y,cx1:p.x,cy1:p.y,x2:p.x,y2:p.y,stroke:D.stroke,sw:D.sw,dash:'none',opacity:1};
   if(type==='cubic')        return{id,type:'cubic',x1:p.x,y1:p.y,cx1:p.x,cy1:p.y,cx2:p.x,cy2:p.y,x2:p.x,y2:p.y,stroke:D.stroke,sw:D.sw,dash:'none',opacity:1};
@@ -212,6 +376,7 @@ function isDegenerate(o){
   if(o.type==='circle')  return o.r<5;
   if(o.type==='ellipse') return o.rx<5||o.ry<5;
   if(o.type==='rect')    return o.w<5||o.h<5;
+  if(o.type==='table')   return false;
   if(o.type==='polyline'){
     const pts=o.points||[];
     if(pts.length<2) return true;
@@ -230,6 +395,8 @@ function openTextInput(cx,cy,svgX,svgY,editObj){
   const r=cvScroll.getBoundingClientRect();
   txtInp.style.left=(cx-r.left+cvScroll.scrollLeft)+'px';
   txtInp.style.top=(cy-r.top+cvScroll.scrollTop-14)+'px';
+  txtInp.style.width='';
+  txtInp.style.height='';
   txtInp.style.display='block'; txtInp.value=editObj?editObj.text:''; txtInp.focus();
   txtCtx={x:svgX,y:svgY,editId:editObj?editObj.id:null};
   if(editObj){objects=objects.filter(o=>o.id!==editObj.id);render();}
@@ -243,8 +410,29 @@ document.addEventListener('pointerdown',e=>{if(txtCtx&&e.target!==txtInp)commitT
 function commitText(){
   if(!txtCtx)return;
   const v=(txtInp.value||'').trim();
+  if(txtCtx.tableId){
+    saveState();
+    const o=getObj(txtCtx.tableId);
+    if(o){syncTableSize(o);o.cells[txtCtx.row][txtCtx.col]=v;selId=o.id;}
+    txtInp.style.display='none';txtInp.style.width='';txtInp.style.height='';txtCtx=null;switchTool('select');render();syncProps();return;
+  }
   if(v){saveState();const id=txtCtx.editId||uid();objects.push({id,type:'text',x:txtCtx.x,y:txtCtx.y,text:v,fs:D.fs,tc:D.tc,bold:false,italic:false,align:'middle',opacity:1});selId=id;}
-  txtInp.style.display='none';txtCtx=null;switchTool('select');render();syncProps();
+  txtInp.style.display='none';txtInp.style.width='';txtInp.style.height='';txtCtx=null;switchTool('select');render();syncProps();
+}
+
+function openTableCellInput(cx, cy, table, p) {
+  syncTableSize(table);
+  const cell = tableCellAt(table, p);
+  if (!cell) return;
+  const r = cvScroll.getBoundingClientRect();
+  txtInp.style.left = (cx - r.left + cvScroll.scrollLeft - cell.w / 2 * zoom + 4) + 'px';
+  txtInp.style.top = (cy - r.top + cvScroll.scrollTop - cell.h / 2 * zoom + 4) + 'px';
+  txtInp.style.width = Math.max(40, cell.w * zoom - 8) + 'px';
+  txtInp.style.height = Math.max(24, cell.h * zoom - 8) + 'px';
+  txtInp.style.display='block';
+  txtInp.value=table.cells[cell.r][cell.c] || '';
+  txtInp.focus();
+  txtCtx={tableId:table.id,row:cell.r,col:cell.c};
 }
 
 /* ── 오른쪽 패널 동기화 ── */
@@ -254,11 +442,13 @@ function syncProps(){
   document.getElementById('r-sel').style.display=o?'block':'none';
   if(!o)return;
   document.getElementById('r-badge').textContent=TYPE_NAME[o.type]||o.type;
-  const isText=o.type==='text',isL=isLine(o)||o.type==='polyline'||o.type==='bezier'||o.type==='quadratic'||o.type==='cubic',isImg=o.type==='image';
+  if(o.type==='table') syncTableSize(o);
+  const isText=o.type==='text',isTable=o.type==='table',isL=isLine(o)||o.type==='polyline'||o.type==='bezier'||o.type==='quadratic'||o.type==='cubic',isImg=o.type==='image';
   document.getElementById('r-line-sec').style.display=(isText||isImg)?'none':'';
   document.getElementById('r-fill-sec').style.display=(isText||isL||isImg)?'none':'';
   document.getElementById('r-obj-op-sec').style.display=isText?'none':'';
   document.getElementById('r-text-sec').style.display=isText?'':'none';
+  document.getElementById('r-table-sec').style.display=isTable?'':'none';
 
   if(!isText&&!isImg){
     setV('r-stroke',o.stroke||'#2c2c2a');setV('r-sw',o.sw||1.5);
@@ -280,6 +470,11 @@ function syncProps(){
     document.getElementById('r-bold').classList.toggle('on',!!o.bold);
     document.getElementById('r-italic').classList.toggle('on',!!o.italic);
     ['r-al-m','r-al-s','r-al-e'].forEach(id=>document.getElementById(id).classList.toggle('on',document.getElementById(id).dataset.align===(o.align||'middle')));
+  }
+  if(isTable){
+    setV('r-rows',o.rows);setV('r-cols',o.cols);
+    setV('r-cell-w',Math.round(tableW(o)/o.cols));
+    setV('r-cell-h',Math.round(tableH(o)/o.rows));
   }
   document.getElementById('r-wh-row').style.display=isText?'none':'';
   const bb=bbox(o);
@@ -315,6 +510,10 @@ document.getElementById('r-italic').addEventListener('click',()=>pc(o=>o.italic=
 ['r-al-m','r-al-s','r-al-e'].forEach(id=>document.getElementById(id).addEventListener('click',()=>pc(o=>o.align=document.getElementById(id).dataset.align)));
 document.getElementById('r-x').addEventListener('change',e=>pc(o=>{const v=parseInt(e.target.value)||0;if(o.type==='circle'||o.type==='ellipse'||o.type==='arc')o.cx=v;else if(isLine(o)){const d=v-o.x1;o.x1=v;o.x2+=d;}else if(o.type==='quadratic'||o.type==='cubic'){const bb=bbox(o); moveObj(o,v-bb.x,0);}else if(o.type==='polyline'||o.type==='polygon'||o.type==='bezier'){const bb=bbox(o); const d=v-bb.x; o.points=o.points.map(([x,y])=>[x+d,y]);}else o.x=v;}));
 document.getElementById('r-y').addEventListener('change',e=>pc(o=>{const v=parseInt(e.target.value)||0;if(o.type==='circle'||o.type==='ellipse'||o.type==='arc')o.cy=v;else if(isLine(o)){const d=v-o.y1;o.y1=v;o.y2+=d;}else if(o.type==='quadratic'||o.type==='cubic'){const bb=bbox(o); moveObj(o,0,v-bb.y);}else if(o.type==='polyline'||o.type==='polygon'||o.type==='bezier'){const bb=bbox(o); const d=v-bb.y; o.points=o.points.map(([x,y])=>[x,y+d]);}else o.y=v;}));
-document.getElementById('r-w').addEventListener('change',e=>pc(o=>{const v=Math.max(4,parseInt(e.target.value)||4);if(o.type==='circle')o.r=v/2;else if(o.type==='ellipse'||o.type==='arc')o.rx=v/2;else if(o.type==='rect'||o.type==='image')o.w=v;else if(isLine(o))o.x2=o.x1+v;}));
-document.getElementById('r-h').addEventListener('change',e=>pc(o=>{const v=Math.max(4,parseInt(e.target.value)||4);if(o.type==='circle')o.r=v/2;else if(o.type==='ellipse'||o.type==='arc')o.ry=v/2;else if(o.type==='rect'||o.type==='image')o.h=v;else if(isLine(o))o.y2=o.y1+v;}));
+document.getElementById('r-w').addEventListener('change',e=>pc(o=>{const v=Math.max(4,parseInt(e.target.value)||4);if(o.type==='circle')o.r=v/2;else if(o.type==='ellipse'||o.type==='arc')o.rx=v/2;else if(o.type==='rect'||o.type==='image')o.w=v;else if(o.type==='table'){const s=v/tableW(o);o.colWidths=o.colWidths.map(w=>Math.max(12,w*s));}else if(isLine(o))o.x2=o.x1+v;}));
+document.getElementById('r-h').addEventListener('change',e=>pc(o=>{const v=Math.max(4,parseInt(e.target.value)||4);if(o.type==='circle')o.r=v/2;else if(o.type==='ellipse'||o.type==='arc')o.ry=v/2;else if(o.type==='rect'||o.type==='image')o.h=v;else if(o.type==='table'){const s=v/tableH(o);o.rowHeights=o.rowHeights.map(h=>Math.max(10,h*s));}else if(isLine(o))o.y2=o.y1+v;}));
+document.getElementById('r-rows').addEventListener('change',e=>pc(o=>{if(o.type!=='table')return;o.rows=clampInt(e.target.value,1,TABLE_MAX);syncTableSize(o);}));
+document.getElementById('r-cols').addEventListener('change',e=>pc(o=>{if(o.type!=='table')return;o.cols=clampInt(e.target.value,1,TABLE_MAX);syncTableSize(o);}));
+document.getElementById('r-cell-w').addEventListener('change',e=>pc(o=>{if(o.type!=='table')return;setTableUniformCells(o,e.target.value,tableH(o)/o.rows);}));
+document.getElementById('r-cell-h').addEventListener('change',e=>pc(o=>{if(o.type!=='table')return;setTableUniformCells(o,tableW(o)/o.cols,e.target.value);}));
 document.getElementById('r-del').addEventListener('click',()=>{if(!selId)return;saveState();objects=objects.filter(o=>o.id!==selId);selId=null;render();syncProps();});

@@ -251,6 +251,24 @@ function buildTikzBundle(baseName = `ks_diagram_${ts()}`) {
       out.push(`  \\draw[${tikzStyle(o, stroke, tikzFill(o, fill))}] ${polyPoints(o.points, true)};`);
     } else if (o.type === 'rect') {
       out.push(`  \\draw[${tikzStyle(o, stroke, tikzFill(o, fill))}] (${tikzX(o.x)}, ${tikzY(o.y)}) rectangle (${tikzX(o.x + o.w)}, ${tikzY(o.y + o.h)});`);
+    } else if (o.type === 'table') {
+      let y = o.y;
+      for (let r = 0; r < o.rows; r++) {
+        let x = o.x;
+        for (let c = 0; c < o.cols; c++) {
+          const w = o.colWidths[c] || 0;
+          const h = o.rowHeights[r] || 0;
+          out.push(`  \\draw[${tikzStyle(o, stroke, tikzFill(o, fill))}] (${tikzX(x)}, ${tikzY(y)}) rectangle (${tikzX(x + w)}, ${tikzY(y + h)});`);
+          const cellText = o.cells?.[r]?.[c] || '';
+          if (cellText) {
+            const extra = [`text=${text}`, `font=\\fontsize{${o.fs || 13}}{${(o.fs || 13) + 2}}\\selectfont`];
+            if ((o.opacity ?? 1) !== 1) extra.push(`opacity=${num(o.opacity ?? 1)}`);
+            out.push(`  \\node[${extra.join(', ')}] at (${tikzX(x + w / 2)}, ${tikzY(y + h / 2)}) {${texEsc(cellText)}};`);
+          }
+          x += w;
+        }
+        y += o.rowHeights[r] || 0;
+      }
     } else if (o.type === 'circle') {
       out.push(`  \\draw[${tikzStyle(o, stroke, tikzFill(o, fill))}] (${tikzX(o.cx)}, ${tikzY(o.cy)}) circle (${num(o.r / 40)}cm);`);
     } else if (o.type === 'ellipse') {
