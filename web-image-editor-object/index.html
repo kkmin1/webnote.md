@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KS 이미지 에디터</title>
-<link rel="stylesheet" href="style.css?v=table-20260508-2">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"></noscript>
+<link rel="stylesheet" href="style.css?v=table-math-20260508-1">
 </head>
 <body>
 
@@ -320,10 +322,11 @@
   <span class="hint">S:선택 | C:원 | E:타원 | R:사각형 | L:직선 | A:화살표 | T:텍스트 | Ctrl+휠:줌</span>
 </div>
 
-<script src="js/state.js?v=table-20260508-2"></script>
-<script src="js/render.js?v=table-20260508-2"></script>
-<script src="js/tools.js?v=table-20260508-2"></script>
-<script src="js/io.js?v=table-20260508-2"></script>
-<script src="js/app.js?v=table-20260508-2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" onload="if(window.render)render();"></script>
+<script src="js/state.js?v=table-math-20260508-1"></script>
+<script src="js/render.js?v=table-math-20260508-1"></script>
+<script src="js/tools.js?v=table-math-20260508-1"></script>
+<script src="js/io.js?v=table-math-20260508-1"></script>
+<script src="js/app.js?v=table-math-20260508-1"></script>
 </body>
 </html>

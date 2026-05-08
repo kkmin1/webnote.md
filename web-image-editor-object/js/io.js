@@ -263,7 +263,9 @@ function buildTikzBundle(baseName = `ks_diagram_${ts()}`) {
           if (cellText) {
             const extra = [`text=${text}`, `font=\\fontsize{${o.fs || 13}}{${(o.fs || 13) + 2}}\\selectfont`];
             if ((o.opacity ?? 1) !== 1) extra.push(`opacity=${num(o.opacity ?? 1)}`);
-            out.push(`  \\node[${extra.join(', ')}] at (${tikzX(x + w / 2)}, ${tikzY(y + h / 2)}) {${texEsc(cellText)}};`);
+            const math = latexCellInfo(cellText);
+            const body = math ? `$${math.displayMode ? '\\displaystyle ' : ''}${math.tex}$` : texEsc(cellText);
+            out.push(`  \\node[${extra.join(', ')}] at (${tikzX(x + w / 2)}, ${tikzY(y + h / 2)}) {${body}};`);
           }
           x += w;
         }

@@ -71,6 +71,13 @@ function richSegments(text) {
   return out;
 }
 
+function latexCellInfo(text) {
+  const s = String(text || '').trim();
+  if (s.length >= 4 && s.startsWith('$$') && s.endsWith('$$')) return { tex:s.slice(2, -2), displayMode:true };
+  if (s.length >= 2 && s.startsWith('$') && s.endsWith('$')) return { tex:s.slice(1, -1), displayMode:false };
+  return null;
+}
+
 function bezierPath(points) {
   if (!points || points.length < 2) return '';
   if (points.length === 2) return `M ${points[0][0]} ${points[0][1]} L ${points[1][0]} ${points[1][1]}`;
@@ -226,15 +233,35 @@ function makeTableEl(o, op) {
     for (let c = 0; c < o.cols; c++) {
       const text = (o.cells?.[r]?.[c] || '').trim();
       if (text) {
-        const t = ns('text', { x:x + (o.colWidths[c] || 0)/2, y:y + (o.rowHeights[r] || 0)/2, 'font-size':o.fs||13, fill:o.tc||'#1a1a18', 'text-anchor':'middle', 'dominant-baseline':'central', 'font-family':"'Pretendard','Apple SD Gothic Neo',sans-serif", 'pointer-events':'none' });
-        t.textContent = text;
-        g.appendChild(t);
+        const cw = o.colWidths[c] || 0;
+        const rh = o.rowHeights[r] || 0;
+        const math = latexCellInfo(text);
+        if (math && window.katex) {
+          const fo = ns('foreignObject', { x:x+3, y:y+2, width:Math.max(1,cw-6), height:Math.max(1,rh-4), 'pointer-events':'none' });
+          const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+          div.setAttribute('style', `width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;color:${o.tc||'#1a1a18'};font-size:${o.fs||13}px;`);
+          try {
+            window.katex.render(math.tex, div, { throwOnError:false, displayMode:math.displayMode });
+            fo.appendChild(div);
+            g.appendChild(fo);
+          } catch (err) {
+            g.appendChild(makeTableText(text, x, y, cw, rh, o));
+          }
+        } else {
+          g.appendChild(makeTableText(text, x, y, cw, rh, o));
+        }
       }
       x += o.colWidths[c] || 0;
     }
     y += o.rowHeights[r] || 0;
   }
   return g;
+}
+
+function makeTableText(text, x, y, w, h, o) {
+  const t = ns('text', { x:x + w/2, y:y + h/2, 'font-size':o.fs||13, fill:o.tc||'#1a1a18', 'text-anchor':'middle', 'dominant-baseline':'central', 'font-family':"'Pretendard','Apple SD Gothic Neo',sans-serif", 'pointer-events':'none' });
+  t.textContent = text;
+  return t;
 }
 
 function drawHandles(o) {

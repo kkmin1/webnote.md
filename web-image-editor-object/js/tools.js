@@ -258,7 +258,15 @@ function onDown(e) {
     } else { selId = null; render(); syncProps(); }
     return;
   }
-  if (tool === 'text') { openTextInput(e.clientX, e.clientY, p.x, p.y, null); return; }
+  if (tool === 'text') {
+    const hit = hitTest(p.x, p.y);
+    if (hit && hit.type === 'table') {
+      selId = hit.id; render(); syncProps();
+      openTableCellInput(e.clientX, e.clientY, hit, p);
+      return;
+    }
+    openTextInput(e.clientX, e.clientY, p.x, p.y, null); return;
+  }
 
   drawing = true; drawP0 = p; saveState();
   drawObj = makeNewObj(tool, p); objects.push(drawObj); render();
@@ -429,6 +437,7 @@ function openTextInput(cx,cy,svgX,svgY,editObj){
   txtInp.style.width='';
   txtInp.style.height='';
   txtInp.style.display='block'; txtInp.value=editObj?editObj.text:''; txtInp.focus();
+  setTimeout(() => { txtInp.focus(); txtInp.select(); }, 0);
   txtCtx={x:svgX,y:svgY,editId:editObj?editObj.id:null};
   if(editObj){objects=objects.filter(o=>o.id!==editObj.id);render();}
 }
@@ -463,6 +472,7 @@ function openTableCellInput(cx, cy, table, p) {
   txtInp.style.display='block';
   txtInp.value=table.cells[cell.r][cell.c] || '';
   txtInp.focus();
+  setTimeout(() => { txtInp.focus(); txtInp.select(); }, 0);
   txtCtx={tableId:table.id,row:cell.r,col:cell.c};
 }
 
