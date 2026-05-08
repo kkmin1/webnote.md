@@ -187,27 +187,55 @@ function makeEl(o) {
     const ms = (o.arrow==='start'||o.arrow==='both') ? marker(o.stroke) : 'none';
     el = ns('line', { x1:o.x1, y1:o.y1, x2:o.x2, y2:o.y2, stroke:o.stroke, 'stroke-width':o.sw, 'stroke-dasharray':dash, 'stroke-linecap':'round', 'marker-end':me, 'marker-start':ms, opacity:op });
   } else if (o.type==='text') {
-    el = ns('text', { x:o.x, y:o.y, 'font-size':o.fs||14, fill:o.tc||'#1a1a18', 'font-weight':o.bold?'700':'400', 'font-style':o.italic?'italic':'normal', 'text-anchor':o.align||'middle', 'dominant-baseline':'central', 'font-family':"'Pretendard','Apple SD Gothic Neo',sans-serif", opacity:op });
-    const parts = richSegments(o.text || '');
-    if (!parts.some(p => p.kind !== 'base')) el.textContent = o.text || '';
-    else {
-      parts.forEach(part => {
-        const t = ns('tspan', {});
-        if (part.kind === 'sub') {
-          t.setAttribute('baseline-shift', '-22%');
-          t.setAttribute('font-size', `${((o.fs||14) * 0.68).toFixed(1)}px`);
-          t.setAttribute('dx', `${-((o.fs||14) * 0.18).toFixed(1)}`);
-        }
-        t.textContent = part.text;
-        el.appendChild(t);
-      });
-    }
+    el = makeTextEl(o, op);
   } else if (o.type==='image') {
     el = ns('image', { x:o.x, y:o.y, width:o.w, height:o.h, href:o.href, preserveAspectRatio:'xMidYMid meet', opacity:op });
   } else if (o.type==='table') {
     el = makeTableEl(o, op);
   }
   return el || null;
+}
+
+function makeTextEl(o, op) {
+  const text = o.text || '';
+  const math = latexCellInfo(text);
+  if (math && window.katex) {
+    const fs = o.fs || 14;
+    const w = Math.max(36, String(math.tex).length * fs * 0.62 + 24);
+    const h = Math.max(24, fs * (math.displayMode ? 2.2 : 1.7));
+    const ax = o.align === 'start' ? o.x : o.align === 'end' ? o.x - w : o.x - w / 2;
+    const justify = o.align === 'start' ? 'flex-start' : o.align === 'end' ? 'flex-end' : 'center';
+    const fo = ns('foreignObject', { x:ax, y:o.y-h/2, width:w, height:h, opacity:op, 'pointer-events':'none' });
+    const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+    div.setAttribute('style', `width:100%;height:100%;display:flex;align-items:center;justify-content:${justify};overflow:visible;color:${o.tc||'#1a1a18'};font-size:${fs}px;font-weight:${o.bold?'700':'400'};font-style:${o.italic?'italic':'normal'};`);
+    try {
+      window.katex.render(math.tex, div, { throwOnError:false, displayMode:math.displayMode });
+      fo.appendChild(div);
+      return fo;
+    } catch (err) {
+      return makePlainTextEl(o, op);
+    }
+  }
+  return makePlainTextEl(o, op);
+}
+
+function makePlainTextEl(o, op) {
+  const el = ns('text', { x:o.x, y:o.y, 'font-size':o.fs||14, fill:o.tc||'#1a1a18', 'font-weight':o.bold?'700':'400', 'font-style':o.italic?'italic':'normal', 'text-anchor':o.align||'middle', 'dominant-baseline':'central', 'font-family':"'Pretendard','Apple SD Gothic Neo',sans-serif", opacity:op });
+  const parts = richSegments(o.text || '');
+  if (!parts.some(p => p.kind !== 'base')) el.textContent = o.text || '';
+  else {
+    parts.forEach(part => {
+      const t = ns('tspan', {});
+      if (part.kind === 'sub') {
+        t.setAttribute('baseline-shift', '-22%');
+        t.setAttribute('font-size', `${((o.fs||14) * 0.68).toFixed(1)}px`);
+        t.setAttribute('dx', `${-((o.fs||14) * 0.18).toFixed(1)}`);
+      }
+      t.textContent = part.text;
+      el.appendChild(t);
+    });
+  }
+  return el;
 }
 
 function makeTableEl(o, op) {

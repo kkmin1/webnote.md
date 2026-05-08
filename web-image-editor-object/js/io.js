@@ -288,7 +288,9 @@ function buildTikzBundle(baseName = `ks_diagram_${ts()}`) {
       if ((o.opacity ?? 1) !== 1) extra.push(`opacity=${num(o.opacity ?? 1)}`);
       if (o.align === 'start') extra.push('anchor=west');
       else if (o.align === 'end') extra.push('anchor=east');
-      out.push(`  \\node[${extra.join(', ')}] at (${tikzX(o.x)}, ${tikzY(o.y)}) {${texEsc(o.text || '')}};`);
+      const math = latexCellInfo(o.text || '');
+      const body = math ? `$${math.displayMode ? '\\displaystyle ' : ''}${math.tex}$` : texEsc(o.text || '');
+      out.push(`  \\node[${extra.join(', ')}] at (${tikzX(o.x)}, ${tikzY(o.y)}) {${body}};`);
     } else if (o.type === 'quadratic') {
       out.push(`  \\draw[${tikzStyle(o, stroke)}] (${tikzX(o.x1)}, ${tikzY(o.y1)}) .. controls (${tikzX(o.cx1)}, ${tikzY(o.cy1)}) .. (${tikzX(o.x2)}, ${tikzY(o.y2)});`);
     } else if (o.type === 'cubic') {
