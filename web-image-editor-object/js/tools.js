@@ -8,6 +8,7 @@ const TYPE_NAME  = { circle:'원', ellipse:'타원', arc:'호', rect:'사각형'
 const TABLE_MAX = 10;
 let lastSvgPos = null;
 let lastTableClick = null;
+let pointerClient = null;
 
 function defaultQuadraticControl(p0, p) {
   const mx = (p0.x + p.x) / 2;
@@ -151,7 +152,7 @@ function scaleArcShape(o, snap, h, dx, dy) {
 /* ── 도구 전환 ── */
 function switchTool(t) {
   if (t === 'table') {
-    const p = lastSvgPos || visibleCanvasCenter();
+    const p = currentPointerCanvasPoint() || visibleCanvasCenter();
     insertTableAt(p);
     return;
   }
@@ -168,6 +169,23 @@ function visibleCanvasCenter() {
     y: (cvScroll.scrollTop + cvScroll.clientHeight / 2) / zoom,
   };
 }
+
+function currentPointerCanvasPoint() {
+  if (!pointerClient) return null;
+  const r = cvSvg.getBoundingClientRect();
+  if (
+    pointerClient.x < r.left || pointerClient.x > r.right ||
+    pointerClient.y < r.top || pointerClient.y > r.bottom
+  ) return null;
+  return {
+    x: (pointerClient.x - r.left) / zoom,
+    y: (pointerClient.y - r.top) / zoom,
+  };
+}
+
+document.addEventListener('pointermove', e => {
+  pointerClient = { x:e.clientX, y:e.clientY };
+}, true);
 
 /* ── 포인터 이벤트 ── */
 cvSvg.addEventListener('pointerdown', onDown);
