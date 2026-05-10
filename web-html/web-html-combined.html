@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML 에디터 통합 예제</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #editor { font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.6; }
+    iframe { width: 100%; height: 100%; border: none; background: white; }
+  </style>
+</head>
+<body class="bg-zinc-900 text-white">
+  <div class="flex h-screen flex-col">
+    <!-- 상단 툴바 -->
+    <div class="flex items-center justify-between px-4 py-3 bg-zinc-800 border-b border-zinc-700">
+      <div class="font-bold text-lg">HTML 에디터</div>
+      
+      <div class="flex items-center gap-2">
+        <!-- 로컬 이미지 업로드 -->
+        <button onclick="uploadLocalImage()" 
+                class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+          로컬 이미지 업로드
+        </button>
+        
+        <!-- 파일 불러오기 -->
+        <button onclick="loadFile()" 
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+          파일 불러오기
+        </button>
+        
+        <!-- 다른 이름으로 저장 -->
+        <button onclick="saveFileAs()" 
+                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded text-sm">
+          다른 이름으로 저장
+        </button>
+        
+        <button onclick="showMathHelp()" 
+                class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">
+          수식 도움말
+        </button>
+      </div>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden">
+      <!-- 에디터 -->
+      <div class="w-1/2 flex flex-col border-r border-zinc-700">
+        <div class="px-4 py-2 bg-zinc-800 text-sm text-zinc-400">HTML 코드</div>
+        <textarea id="editor" class="flex-1 p-4 bg-zinc-950 text-emerald-300 resize-none outline-none font-mono"></textarea>
+      </div>
+
+      <!-- 미리보기 -->
+      <div class="w-1/2 flex flex-col">
+        <div class="px-4 py-2 bg-zinc-800 text-sm text-zinc-400">미리보기</div>
+        <div class="flex-1 bg-white">
+          <iframe id="preview"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const editor = document.getElementById('editor');
+    const preview = document.getElementById('preview');
+
+    // 기본 예제 코드 (3개 파일의 예제 내용 통합)
+    const defaultCode = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
+      background: #f8fafc;
+      line-height: 1.7;
+    }
+    h1 { color: #111827; }
+    h2 { color: #1e40af; border-bottom: 2px solid #bfdbfe; padding-bottom: 6px; margin-top: 32px; }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; background: white; }
+    th, td { border: 1px solid #64748b; padding: 10px; text-align: center; }
+    th { background-color: #1e40af; color: white; font-weight: 600; }
+    tr:nth-child(even) { background-color: #f1f5f9; }
+    svg { display: block; margin: 16px 0 24px; max-width: 100%; }
+    a { color: #2563eb; }
+    .calculator {
+      background:#1e2937;
+      padding:20px;
+      border-radius:12px;
+      width:280px;
+      color:white;
+    }
+    .calculator input {
+      width:100%;
+      height:50px;
+      font-size:24px;
+      text-align:right;
+      background:#0f172a;
+      border:none;
+      color:white;
+      padding:0 15px;
+      border-radius:8px;
+      box-sizing:border-box;
+    }
+    .calc-grid {
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:8px;
+      margin-top:12px;
+    }
+    .calc-grid button {
+      padding:12px;
+      color:white;
+      border:none;
+      border-radius:8px;
+      background:#334155;
+      cursor:pointer;
+    }
+    .calc-grid .operator { background:#475569; }
+    .calc-grid .equals { background:#3b82f6; }
+  </style>
+</head>
+<body>
+
+  <h1>실시간 HTML 에디터 통합 예제</h1>
+  <p>세 파일에 있던 표, SVG, 수식, 이미지, 링크, JavaScript 예제를 한 페이지에 모았습니다.</p>
+
+  <!-- 기본 표 예시 -->
+  <h2>기본 표 예시</h2>
+  <table>
+    <tr><th>이름</th><th>나이</th><th>직업</th></tr>
+    <tr><td>홍길동</td><td>25</td><td>개발자</td></tr>
+    <tr><td>김철수</td><td>30</td><td>디자이너</td></tr>
+  </table>
+
+  <!-- 5x6 표 (셀 병합 포함) -->
+  <h2>5×6 표 (셀 병합)</h2>
+  <table>
+    <tr>
+      <th rowspan="2">구분</th>
+      <th colspan="2">2023년</th>
+      <th colspan="2">2024년</th>
+      <th rowspan="2">증감률</th>
+    </tr>
+    <tr>
+      <th>상반기</th>
+      <th>하반기</th>
+      <th>상반기</th>
+      <th>하반기</th>
+    </tr>
+    <tr>
+      <td><strong>매출</strong></td>
+      <td>1,250</td>
+      <td>1,480</td>
+      <td>1,320</td>
+      <td>1,650</td>
+      <td style="color:green">+12.4%</td>
+    </tr>
+    <tr>
+      <td><strong>영업이익</strong></td>
+      <td>320</td>
+      <td>410</td>
+      <td>380</td>
+      <td>520</td>
+      <td style="color:green">+26.8%</td>
+    </tr>
+    <tr>
+      <td><strong>순이익</strong></td>
+      <td>210</td>
+      <td>290</td>
+      <td>260</td>
+      <td>370</td>
+      <td style="color:green">+27.6%</td>
+    </tr>
+  </table>
+
+  <!-- 수학식 예시 -->
+  <h2>수학식 예시</h2>
+  <p>인라인 수식: \\( E = mc^2 \\)</p>
+  <p>블록 수식:</p>
+  $$ \\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi} $$
+
+  <!-- SVG 이미지 -->
+  <h2>SVG 이미지</h2>
+  <svg width="200" height="120" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="10" width="180" height="100" rx="10" fill="#3b82f6"/>
+    <circle cx="100" cy="60" r="30" fill="#fff"/>
+    <text x="100" y="65" text-anchor="middle" fill="#3b82f6" font-size="20">SVG</text>
+  </svg>
+
+  <!-- 태극기 SVG -->
+  <h2>태극기 (SVG)</h2>
+  <svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+    <rect width="300" height="200" fill="#FFFFFF"/>
+    <circle cx="150" cy="100" r="45" fill="#003478"/>
+    <path d="M150,55 A45,45 0 0,1 150,145 A22.5,22.5 0 0,0 150,100 A22.5,22.5 0 0,1 150,55" fill="#C60C30"/>
+    <path d="M150,145 A45,45 0 0,1 150,55 A22.5,22.5 0 0,0 150,100 A22.5,22.5 0 0,1 150,145" fill="#C60C30"/>
+    <rect x="230" y="35" width="50" height="8" fill="#000"/>
+    <rect x="230" y="50" width="50" height="8" fill="#000"/>
+    <rect x="230" y="65" width="50" height="8" fill="#000"/>
+    <rect x="20" y="35" width="50" height="8" fill="#000"/>
+    <rect x="20" y="50" width="20" height="8" fill="#000"/>
+    <rect x="50" y="50" width="20" height="8" fill="#000"/>
+    <rect x="20" y="65" width="50" height="8" fill="#000"/>
+    <rect x="230" y="125" width="50" height="8" fill="#000"/>
+    <rect x="230" y="140" width="20" height="8" fill="#000"/>
+    <rect x="260" y="140" width="20" height="8" fill="#000"/>
+    <rect x="230" y="155" width="50" height="8" fill="#000"/>
+    <rect x="20" y="125" width="50" height="8" fill="#000"/>
+    <rect x="20" y="140" width="20" height="8" fill="#000"/>
+    <rect x="50" y="140" width="20" height="8" fill="#000"/>
+    <rect x="20" y="155" width="50" height="8" fill="#000"/>
+  </svg>
+
+  <!-- 이미지 -->
+  <h2>외부 이미지</h2>
+  <img src="https://picsum.photos/id/1015/600/300" alt="샘플 이미지" style="max-width:100%; border-radius:8px;">
+
+  <!-- 링크 -->
+  <h2>링크</h2>
+  <p><a href="https://google.com" target="_blank">Google로 이동</a></p>
+
+  <!-- 간단한 계산기 -->
+  <h2>간단한 계산기</h2>
+  <div class="calculator">
+    <input id="calc-display" type="text" value="0">
+    <div class="calc-grid">
+      <button onclick="append('7')">7</button>
+      <button onclick="append('8')">8</button>
+      <button onclick="append('9')">9</button>
+      <button class="operator" onclick="append('/')">÷</button>
+      <button onclick="append('4')">4</button>
+      <button onclick="append('5')">5</button>
+      <button onclick="append('6')">6</button>
+      <button class="operator" onclick="append('*')">×</button>
+      <button onclick="append('1')">1</button>
+      <button onclick="append('2')">2</button>
+      <button onclick="append('3')">3</button>
+      <button class="operator" onclick="append('-')">−</button>
+      <button onclick="append('0')">0</button>
+      <button class="operator" onclick="clearCalc()">C</button>
+      <button class="equals" onclick="calculate()">=</button>
+      <button class="operator" onclick="append('+')">+</button>
+    </div>
+  </div>
+
+  <script>
+    const display = document.getElementById('calc-display');
+    function append(val) {
+      display.value = display.value === '0' ? val : display.value + val;
+    }
+    function clearCalc() {
+      display.value = '0';
+    }
+    function calculate() {
+      try {
+        display.value = Function('"use strict"; return (' + display.value + ')')();
+      } catch(e) {
+        display.value = 'Error';
+      }
+    }
+    console.log('JavaScript도 정상 동작합니다!');
+  <\/script>
+
+</body>
+</html>`;
+
+    editor.value = defaultCode;
+
+    // 미리보기 업데이트
+    function updatePreview() {
+      const doc = preview.contentDocument || preview.contentWindow.document;
+      const htmlContent = editor.value;
+
+      const fullHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>
+        </head>
+        <body>
+          ${htmlContent}
+        </body>
+        </html>
+      `;
+
+      doc.open();
+      doc.write(fullHTML);
+      doc.close();
+    }
+
+    let timeout;
+    editor.addEventListener('input', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(updatePreview, 400);
+    });
+
+    window.onload = () => updatePreview();
+
+    // 다른 이름으로 저장
+    function saveFileAs() {
+      const filename = prompt("저장할 파일명을 입력하세요:", "document.html");
+      if (!filename) return;
+
+      const blob = new Blob([editor.value], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 파일 불러오기
+    function loadFile() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.html,.htm';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = ev => {
+          editor.value = ev.target.result;
+          updatePreview();
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    // 로컬 이미지 업로드
+    function uploadLocalImage() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const imgTag = `<img src="${ev.target.result}" alt="업로드 이미지" style="max-width: 100%; border-radius: 8px; margin: 10px 0;">`;
+          editor.value = editor.value.replace('</body>', imgTag + '\n</body>');
+          updatePreview();
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+
+    function showMathHelp() {
+      alert(`수식 입력 방법
+
+인라인: \\( E = mc^2 \\)
+블록: $$ \\frac{a}{b} = c $$`);
+    }
+  </script>
+</body>
+</html>
