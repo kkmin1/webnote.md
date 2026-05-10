@@ -29,12 +29,19 @@ function builtinRead(x) {
 
 function formatSkulptError(err) {
     if (!err) return "Unknown Skulpt error";
-    if (err.tp$str) return err.tp$str().v;
+    if (err.tp$str) {
+        try {
+            return err.tp$str().v;
+        } catch (e) {
+            // Fall through to the generic formatting below.
+        }
+    }
     if (err.args && err.args.v && err.args.v.length) {
         return err.args.v.map(function(arg) {
             return arg && arg.v !== undefined ? arg.v : String(arg);
         }).join(" ");
     }
+    if (err.name && err.message) return err.name + ": " + err.message;
     if (err.message) return err.message;
     return String(err);
 }
@@ -64,8 +71,9 @@ function runit() {
        console.log('success');
    },
        function(err) {
-       mypre.textContent = formatSkulptError(err);
-       console.error(err);
+       var message = formatSkulptError(err);
+       mypre.textContent = message;
+       console.error(message);
    });
 } 
 </script> 
@@ -73,10 +81,16 @@ function runit() {
 <h3>python 2.7</h3> 
 <form> 
 <textarea id="yourcode" cols="80" rows="50">
-from turtle import Turtle, Screen
+from turtle import *
 
-t = Turtle()
-t.forward(100)
+speed(0)
+forward(100)
+left(90)
+forward(100)
+left(90)
+forward(100)
+left(90)
+forward(100)
 
 
 WIDTH, HEIGHT = 10, 10  # coordinate system size
@@ -105,9 +119,6 @@ def axis(turtle, distance):
     turtle.forward(distance)
     turtle.setposition(position)
     turtle.backward(distance)
-
-screen = Screen()
-screen.setworldcoordinates(-WIDTH/2, -HEIGHT/2, WIDTH/2, HEIGHT/2)
 
 ivy = Turtle()
 ivy.speed('fastest')
