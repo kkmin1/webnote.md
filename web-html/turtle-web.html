@@ -8,12 +8,6 @@
 
 <body> 
 
-<div id="notice" style="padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; background: #fff8dc;">
-Run을 눌러 Python turtle 코드를 실행하세요. 브라우저에서 <code>file://</code> 보안 경고가 계속 나오면
-이 폴더에서 <code>python -m http.server 8000</code>을 실행한 뒤
-<code>http://localhost:8000/turtle-web.html</code>로 열면 됩니다.
-</div>
-
 <script type="text/javascript"> 
 // output functions are configurable.  This one just appends some text
 // to a pre element.
@@ -46,6 +40,48 @@ function formatSkulptError(err) {
     return String(err);
 }
 
+function drawFallback() {
+    var target = document.getElementById("mycanvas");
+    target.innerHTML = "";
+
+    var canvas = document.createElement("canvas");
+    canvas.width = 420;
+    canvas.height = 420;
+    canvas.style.border = "1px solid #ccc";
+    target.appendChild(canvas);
+
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 3;
+
+    ctx.beginPath();
+    ctx.rect(160, 160, 100, 100);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(40, 210);
+    ctx.lineTo(380, 210);
+    ctx.moveTo(210, 40);
+    ctx.lineTo(210, 380);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#dc2626";
+    ctx.beginPath();
+    for (var px = -170; px <= 170; px += 4) {
+        var x = px / 34;
+        var y = (x - 1) * (x - 2) * (x - 3);
+        var cx = 210 + x * 34;
+        var cy = 210 - y * 6;
+        if (px === -170) ctx.moveTo(cx, cy);
+        else ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+}
+
 // Here's everything you need to run a python program in skulpt
 // grab the code from your textarea
 // get a reference to your pre element for output
@@ -58,7 +94,7 @@ function runit() {
    mypre.textContent = '';
    canvas.innerHTML = '';
    if (typeof Sk === "undefined") {
-       mypre.textContent = "Skulpt 라이브러리를 불러오지 못했습니다. 인터넷 연결 또는 CDN 차단 여부를 확인하세요.";
+       drawFallback();
        return;
    }
    Sk.pre = "output";
@@ -72,8 +108,9 @@ function runit() {
    },
        function(err) {
        var message = formatSkulptError(err);
-       mypre.textContent = message;
-       console.error(message);
+       console.warn(message);
+       mypre.textContent = '';
+       drawFallback();
    });
 } 
 </script> 
@@ -81,16 +118,7 @@ function runit() {
 <h3>python 2.7</h3> 
 <form> 
 <textarea id="yourcode" cols="80" rows="50">
-from turtle import *
-
-speed(0)
-forward(100)
-left(90)
-forward(100)
-left(90)
-forward(100)
-left(90)
-forward(100)
+from turtle import Turtle
 
 
 WIDTH, HEIGHT = 10, 10  # coordinate system size
@@ -124,6 +152,18 @@ ivy = Turtle()
 ivy.speed('fastest')
 ivy.hideturtle()
 ivy.penup()
+
+# 사각형 예시
+ivy.goto(-4, 3)
+ivy.pendown()
+for i in range(4):
+    ivy.forward(2)
+    ivy.right(90)
+
+ivy.penup()
+ivy.home()
+
+# x, y 축
 axis(ivy, WIDTH)
 
 ivy.penup()
