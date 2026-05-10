@@ -13,31 +13,33 @@
 <body class="bg-zinc-900 text-white">
   <div class="flex h-screen flex-col">
     <!-- 상단 툴바 -->
-    <div class="flex items-center justify-between px-4 py-3 bg-zinc-800 border-b border-zinc-700">
-      <div class="font-bold text-lg">HTML 에디터</div>
+    <div class="flex flex-col gap-2 px-4 py-3 bg-zinc-800 border-b border-zinc-700">
+      <div class="w-full text-center text-3xl font-extrabold text-cyan-300 tracking-normal">
+        HTML WIZWIG 에디터
+      </div>
       
-      <div class="flex items-center gap-2">
+      <div class="flex w-full items-center justify-end gap-1.5">
         <!-- 로컬 이미지 업로드 -->
         <button onclick="uploadLocalImage()" 
-                class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs leading-tight">
           로컬 이미지 업로드
         </button>
         
         <!-- 파일 불러오기 -->
         <button onclick="loadFile()" 
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs leading-tight">
           파일 불러오기
         </button>
         
         <!-- 다른 이름으로 저장 -->
         <button onclick="saveFileAs()" 
-                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded text-sm">
+                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-xs leading-tight">
           다른 이름으로 저장
         </button>
         
         <button onclick="showMathHelp()" 
-                class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">
-          수식 도움말
+                class="px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs leading-tight">
+          도움말
         </button>
       </div>
     </div>
@@ -45,13 +47,17 @@
     <div class="flex flex-1 overflow-hidden">
       <!-- 에디터 -->
       <div class="w-1/2 flex flex-col border-r border-zinc-700">
-        <div class="px-4 py-2 bg-zinc-800 text-sm text-zinc-400">HTML 코드</div>
+        <div class="flex items-center justify-center px-4 py-3 bg-zinc-800 text-xl font-bold text-amber-300">
+          HTML 에디터
+        </div>
         <textarea id="editor" class="flex-1 p-4 bg-zinc-950 text-emerald-300 resize-none outline-none font-mono"></textarea>
       </div>
 
       <!-- 미리보기 -->
       <div class="w-1/2 flex flex-col">
-        <div class="px-4 py-2 bg-zinc-800 text-sm text-zinc-400">미리보기</div>
+        <div class="flex items-center justify-center px-4 py-3 bg-zinc-800 text-xl font-bold text-sky-300">
+          웹페이지 미리보기
+        </div>
         <div class="flex-1 bg-white">
           <iframe id="preview"></iframe>
         </div>
