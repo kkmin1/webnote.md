@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Markdown Editor</title>
+    <meta name="description" content="A beautiful, real-time Markdown editor with a luxury interface.">
+    <link rel="stylesheet" href="style.css?v=8">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
+    <!-- Highlight.js for code highlighting in preview -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="latex.js?v=8"></script>
+    <script src="LatexTable.js"></script>
+    <script src="script.js?v=8"></script>
+
+
+
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <span class="gradient-text">Markdown</span> Editor
+            </div>
+            <div class="actions">
+                <button id="open-file-btn" class="secondary-btn" title="파일 불러오기">
+                    파일 선택
+                </button>
+                <button id="open-folder-btn" class="secondary-btn" title="폴더 불러오기">
+                    폴더 선택
+                </button>
+                <button id="save-btn" title="저장하기">
+                    저장하기
+                </button>
+            </div>
+        </header>
+        <div class="open-hint">
+            먼저 `파일 선택`으로 문서를 열고, 이미지가 안 보이면 `폴더 선택`으로 해당 문서의 이미지 폴더를 연결하세요.
+        </div>
+        <input type="file" id="file-input" accept=".md,.svg,text/markdown,text/plain,image/svg+xml" hidden>
+        <input type="file" id="dir-input" webkitdirectory directory multiple hidden>
+
+        <main>
+            <section class="editor-pane">
+                <div class="pane-header">
+                    <span>Editor</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button id="copy-btn" title="복사">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            복사
+                        </button>
+                        <button id="clear-btn" title="내용 지우기">지우기</button>
+                    </div>
+                </div>
+                <textarea id="markdown-input" placeholder="Type your markdown here..." spellcheck="false"></textarea>
+            </section>
+
+            <section class="preview-pane">
+
+                <div id="keep-preview" class="markdown-body"></div>
+                <div class="pane-action-bar">
+                    <button id="copy-all-btn" class="secondary-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy All Content
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="stat">Words: <span id="word-count">0</span></div>
+            <div class="stat">Chars: <span id="char-count">0</span></div>
+            <div class="credits">Crafted with ✨ by Antigravity</div>
+        </footer>
+    </div>
+
+
+</body>
+
+</html>
