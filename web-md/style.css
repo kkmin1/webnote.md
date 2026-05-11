@@ -1,0 +1,464 @@
+:root {
+    --bg-color: #0d0f14;
+    --surface-color: #1a1d24;
+    --border-color: #2d323d;
+    --accent-color: #6366f1;
+    --accent-glow: rgba(99, 102, 241, 0.3);
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --header-height: 60px;
+    --footer-height: 30px;
+    --transition-speed: 0.3s;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family:
+        "Inter",
+        system-ui,
+        -apple-system,
+        sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Header */
+header {
+    height: var(--header-height);
+    background: rgba(26, 29, 36, 0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    z-index: 10;
+}
+
+.open-hint {
+    padding: 0.65rem 2rem 0;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.logo {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+button {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all var(--transition-speed) ease;
+    box-shadow: 0 0 15px var(--accent-glow);
+}
+
+button:hover {
+    background: #4f46e5;
+    transform: translateY(-1px);
+    box-shadow: 0 0 25px var(--accent-glow);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.status-indicator {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-indicator::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #10b981;
+}
+
+/* Main Content */
+main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    padding: 1rem;
+    gap: 1rem;
+}
+
+section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow var(--transition-speed);
+}
+
+section:focus-within {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.pane-header {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.language {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+#clear-btn,
+#copy-btn {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    box-shadow: none;
+}
+#clear-btn:hover,
+#copy-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    box-shadow: none;
+    transform: none;
+}
+
+/* Textarea / Editor */
+textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    padding: 1.5rem;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    resize: none;
+}
+
+/* Preview Area */
+.preview-pane {
+    background: #ffffff;
+    /* White background to match Keep/Document style */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+#keep-preview {
+    flex: 1;
+    padding: 1.5rem;
+    padding-bottom: 5rem;
+    /* Extra space for the floating button */
+    overflow-y: auto;
+    line-height: 1.6;
+    color: #3c4043;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.pane-action-bar {
+    position: absolute;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+    z-index: 5;
+}
+
+#copy-all-btn {
+    background: #202124;
+    color: white;
+    padding: 0.75rem 1.25rem;
+    border-radius: 50px;
+    /* Pill shape */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+}
+
+#copy-all-btn:hover {
+    background: #3c4043;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Markdown Styling for Keep (Clean & Simple) */
+.markdown-body {
+    font-size: 1.05rem;
+    font-family: "Inter", sans-serif;
+}
+
+.markdown-body p {
+    margin-bottom: 1.2rem;
+}
+
+.markdown-body img,
+.markdown-body .md-svg-object,
+.markdown-body object[type="image/svg+xml"] {
+    display: block;
+    max-width: min(100%, 720px);
+    width: auto;
+    height: auto;
+    margin: 1rem auto;
+}
+
+.markdown-body h1 {
+    font-size: 2.2rem;
+    margin-top: 1.2rem;
+    margin-bottom: 0.8rem;
+    color: #111827;
+    font-weight: 800;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0.3rem;
+}
+
+.markdown-body h2 {
+    font-size: 1.75rem;
+    margin-top: 1.2rem;
+    margin-bottom: 0.8rem;
+    color: #374151;
+    font-weight: 700;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 0.3rem;
+}
+
+.markdown-body h3 {
+    font-size: 1.4rem;
+    margin-top: 1rem;
+    margin-bottom: 0.6rem;
+    color: #4b5563;
+    font-weight: 700;
+}
+
+.markdown-body strong {
+    font-weight: 700;
+    color: #000;
+    display: inline;
+}
+
+/* Ensure raw HTML strong also works */
+.markdown-body b,
+.markdown-body strong {
+    font-weight: 800 !important;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 1.5rem;
+    margin: 1rem 0;
+}
+
+.markdown-body code {
+    background: #f1f3f4;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85em;
+    color: #d93025;
+}
+
+.markdown-body pre {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 1rem 0;
+    border: 1px solid #333;
+}
+
+.markdown-body blockquote {
+    border-left: 4px solid #dadce0;
+    padding-left: 1rem;
+    color: #5f6368;
+    margin: 1rem 0;
+}
+
+.markdown-body table {
+    border-collapse: collapse;
+    width: auto;
+    min-width: 200px;
+    max-width: 100%;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+    border: 1px solid #333;
+    padding: 10px 15px;
+    text-align: center;
+}
+
+.markdown-body th {
+    background-color: #f8f9fa;
+    border: 1px solid #333;
+    font-weight: 600;
+}
+
+.markdown-body tr:nth-child(even) {
+    background-color: #fafafa;
+}
+
+/* 표에 대각선을 긋는 코드, 여기서는 th 태그의 id = diag 셀에 대각선을 긋는다. */
+table:nth-of-type(1) th#diag {
+    /* 첫번째 표에 대각선을 긋는다. */
+    background-image: linear-gradient(
+        to top right,
+        white 49%,
+        black,
+        white 51%
+    );
+}
+table:nth-of-type(2) th#diag {
+    /* 두번째 표에 대각선을 긋는다. */
+    background-image: linear-gradient(
+        to top right,
+        white 49%,
+        black,
+        white 51%
+    );
+}
+
+/* LaTeX SVG (via upmath.me) */
+.markdown-body img.latex-svg {
+    vertical-align: middle;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+}
+
+.markdown-body img.latex-inline-svg {
+    display: inline-block;
+    margin: 0 0.08em;
+}
+
+.markdown-body .latex-block {
+    text-align: center;
+    margin: 1.2em 0;
+}
+
+.markdown-body .latex-block img.latex-block-svg {
+    display: inline-block;
+    margin: 0 auto;
+}
+
+/* Centered elements */
+.markdown-body p[align="center"] {
+    text-align: center;
+}
+
+/* Footer */
+footer {
+    height: var(--footer-height);
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 1rem;
+    gap: 2rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.stat span {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.credits {
+    margin-left: auto;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3f444e;
+}
+
+@media (max-width: 768px) {
+    header {
+        height: auto;
+        padding: 10px 1rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .actions {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        width: 100%;
+        justify-content: flex-start;
+    }
+    main {
+        flex-direction: column;
+    }
+}
