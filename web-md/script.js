@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyBtn = document.getElementById('copy-btn');
     const openFileBtn = document.getElementById('open-file-btn');
     const openFolderBtn = document.getElementById('open-folder-btn');
+    const saveAsBtn = document.getElementById('save-as-btn');
     const saveBtn = document.getElementById('save-btn');
     const clearBtn = document.getElementById('clear-btn');
     const fileInput = document.getElementById('file-input');
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentWorkspaceFiles = new Map();
     const assetObjectUrls = new Map();
 
+    const isDesktop = !!window.desktopApi;
     const UPMATH = 'https://i.upmath.me/svg/';
 
     marked.setOptions({ breaks: true, gfm: true, silent: true });
@@ -28,8 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const isSvgPath = p => typeof p === 'string' && /\.svg(\?.*)?(#.*)?$/i.test(p.trim());
     const hasUrlScheme = value => /^[a-z][a-z0-9+.-]*:/i.test(value);
+    const isWindowsAbsolutePath = value => /^[a-z]:[\\/]/i.test(String(value ?? ''));
     const normalizeRelPath = value => String(value ?? '').replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '');
     const isApiDocumentPath = value => hasDocumentApi && typeof value === 'string' && value.includes(':\\');
+
+    function filePathToFileUrl(filePath) {
+        const normalized = String(filePath ?? '').replace(/\\/g, '/');
+        return `file:///${normalized.replace(/^\/+/, '')}`;
+    }
 
     function revokeAssetObjectUrls() {
         for (const url of assetObjectUrls.values()) URL.revokeObjectURL(url);
@@ -86,6 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasUrlScheme(value)) return value;
         if (isApiDocumentPath(currentFilePath)) {
             return `/api/asset?doc=${encodeURIComponent(currentFilePath)}&src=${encodeURIComponent(value)}`;
+        }
+        if (isDesktop && isWindowsAbsolutePath(currentFilePath)) {
+            return new URL(value, filePathToFileUrl(getCurrentDocumentDir())).href;
         }
 
         try {
@@ -379,11 +390,45 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
+    const savePdf = async () => {
+        if (isDesktop && window.desktopApi?.savePdf) {
+            await window.desktopApi.savePdf({
+                html: preview.innerHTML,
+                title: currentFileName || 'document'
+            });
+            return;
+        }
+        savePdfInBrowser();
+    };
+
+    const saveDesktopSourceFile = async (forceDialog = false) => {
+        const result = await window.desktopApi.saveFile({
+            content: input.value,
+            currentPath: forceDialog ? null : currentFilePath,
+            currentType: currentFileType
+        });
+        if (!result) return;
+        currentFilePath = result.path;
+        currentFileName = result.name;
+    };
+
     const handleSave = async () => {
+        if (isDesktop && window.desktopApi?.saveFile) {
+            await saveDesktopSourceFile(false);
+            return;
+        }
         const format = promptSaveFormat();
         if (!format) return;
         if (format === 'pdf') {
-            savePdfInBrowser();
+            await savePdf();
+            return;
+        }
+        await saveSourceFile();
+    };
+
+    const handleSaveAs = async () => {
+        if (isDesktop && window.desktopApi?.saveFile) {
+            await saveDesktopSourceFile(true);
             return;
         }
         await saveSourceFile();
@@ -569,12 +614,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
     };
 
-    const init = async () => {
+    const initWeb = async () => {
         hasDocumentApi = await detectDocumentApi();
         await loadTestMd();
     };
 
-    init();
+    const initDesktop = async () => {
+        window.desktopApi.onOpenFile(doc => loadDocument(doc));
+        const launchFile = await window.desktopApi.getLaunchFile();
+        if (launchFile) {
+            loadDocument(launchFile);
+        } else {
+            await loadTestMd();
+        }
+        if (openFolderBtn) openFolderBtn.style.display = 'none';
+    };
+
+    if (isDesktop) {
+        initDesktop();
+    } else {
+        initWeb();
+    }
 
     input.addEventListener('input', () => { updatePreview(); });
     clearBtn?.addEventListener('click', () => {
@@ -584,13 +644,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     openFileBtn?.addEventListener('click', () => {
+        if (isDesktop) {
+            window.desktopApi.openFile().then(doc => {
+                if (doc) loadDocument(doc);
+            });
+            return;
+        }
         if (hasDocumentApi) {
             promptAndLoadLocalDocument();
             return;
         }
         fileInput.click();
     });
-    openFolderBtn?.addEventListener('click', () => openFolderWorkspace());
+    openFolderBtn?.addEventListener('click', () => {
+        if (!isDesktop) openFolderWorkspace();
+    });
     dirInput?.addEventListener('change', async e => {
         const entries = Array.from(e.target.files || []).map(file => ({
             path: normalizeRelPath(file.webkitRelativePath || file.name),
@@ -618,6 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     saveBtn?.addEventListener('click', () => handleSave());
+    saveAsBtn?.addEventListener('click', () => handleSaveAs());
     document.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
             e.preventDefault();

@@ -22,6 +22,13 @@ http://127.0.0.1:8080/web-md/index.html
 python serve_local.py
 ```
 
+Node 서버를 사용할 수도 있습니다. Electron 앱 빌드와 같은 `package.json`에서 관리됩니다.
+
+```powershell
+npm install
+npm run serve:web
+```
+
 정적 파일(`index.html`, `script.js`, `style.css`, `latex.js`)만 고친 경우 서버를 다시 켤 필요는 없습니다. 브라우저만 새로고침하면 됩니다. 캐시가 남으면 `Ctrl + F5` 또는 `Ctrl + Shift + R`로 강력 새로고침하세요.
 
 ## 시작 문서
@@ -39,6 +46,10 @@ python serve_local.py
 - `LatexTable.js`: LaTeX `tabular` 표 렌더링
 - `test.md`: 앱 시작 시 자동으로 불러오는 예시 문서
 - `serve_local.py`: 로컬 문서와 이미지 자산을 열기 위한 서버
+- `server.js`: Node 기반 정적/문서 API 서버
+- `package.json`: Electron 앱 실행과 Windows 빌드 설정
+- `main.js`: Electron 메인 프로세스
+- `preload.js`: Electron renderer에 안전하게 노출하는 desktop API
 
 ## LaTeX 수식
 
@@ -104,9 +115,34 @@ A & B \\ \hline
 
 ## 캐시 버전
 
-`index.html`은 `script.js?v=12`, `style.css?v=12`, `latex.js?v=12`처럼 버전 쿼리를 붙여 브라우저 캐시를 피합니다. JS/CSS를 고친 뒤 브라우저가 예전 동작을 보이면 버전 숫자를 올리고 강력 새로고침하세요.
+`index.html`은 `script.js?v=13`, `style.css?v=13`, `latex.js?v=13`처럼 버전 쿼리를 붙여 브라우저 캐시를 피합니다. JS/CSS를 고친 뒤 브라우저가 예전 동작을 보이면 버전 숫자를 올리고 강력 새로고침하세요.
 
-화면 안내 문구 옆의 `web-md v12` 표식은 현재 로드된 HTML 버전을 확인하기 위한 표시입니다.
+화면 안내 문구 옆의 `web-md v13` 표식은 현재 로드된 HTML 버전을 확인하기 위한 표시입니다.
+
+## Electron 앱
+
+이 폴더는 웹 실행과 Electron 앱 빌드를 한곳에서 처리합니다. 예전 `md-viewer` 폴더의 앱 배포용 파일을 이 폴더로 통합했습니다.
+
+개발 모드:
+
+```powershell
+npm install
+npm start
+```
+
+패키징 확인:
+
+```powershell
+npm run pack
+```
+
+Windows 설치형/무설치형 빌드:
+
+```powershell
+npm run dist:win
+```
+
+빌드 산출물과 의존성 폴더(`node_modules`, `dist`, `release-*`)는 `.gitignore`로 제외합니다.
 
 ## 최근 수정 요약
 
@@ -117,6 +153,7 @@ A & B \\ \hline
 - `latex.js`에 남아 있던 git 충돌 마커와 중복 본문 정리
 - 에디터 `복사` 버튼을 Markdown 원문 복사로 수정
 - preview `Copy All Content`에 HTML 복사 실패 시 plain text fallback 추가
+- `md-viewer`의 Electron 앱 빌드 설정을 `web-md`로 통합
 
 ## 알려진 주의점
 

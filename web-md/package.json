@@ -1,0 +1,54 @@
+{
+  "name": "web-md",
+  "version": "2.0.0",
+  "description": "Desktop Markdown editor with LaTeX, SVG, and Windows file association support.",
+  "main": "main.js",
+  "author": "kkmin1",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "serve:web": "node server.js",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.kkmin1.webmd",
+    "productName": "Web Markdown Editor",
+    "files": [
+      "index.html",
+      "script.js",
+      "style.css",
+      "latex.js",
+      "LatexTable.js",
+      "diagram.svg",
+      "ppp.svg",
+      "svg001.svg",
+      "test.jpg",
+      "test.md",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown Document",
+        "description": "Markdown document",
+        "role": "Editor"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^41.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}
