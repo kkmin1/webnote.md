@@ -389,20 +389,68 @@ document.addEventListener('DOMContentLoaded', () => {
         await saveSourceFile();
     };
 
-    const copyTo = btn => {
-        navigator.clipboard.write([new ClipboardItem({
-            'text/html': new Blob([preview.innerHTML], { type: 'text/html' }),
-            'text/plain': new Blob([preview.innerText], { type: 'text/plain' })
-        })]).then(() => {
-            const o = btn.innerHTML;
-            const ob = btn.style.background;
-            btn.innerHTML = '<span>Copied!</span>';
-            btn.style.background = '#10b981';
-            setTimeout(() => {
-                btn.innerHTML = o;
-                btn.style.background = ob;
-            }, 2000);
-        }).catch(() => navigator.clipboard.writeText(preview.innerText));
+    function flashCopied(btn, label = 'Copied!') {
+        const originalHtml = btn.innerHTML;
+        const originalBackground = btn.style.background;
+        btn.innerHTML = `<span>${label}</span>`;
+        btn.style.background = '#10b981';
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = originalBackground;
+        }, 2000);
+    }
+
+    function fallbackCopyText(text) {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        area.remove();
+        if (!ok) throw new Error('Copy command failed');
+    }
+
+    async function copyPlainText(text) {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+        fallbackCopyText(text);
+    }
+
+    const copyEditorSource = async btn => {
+        try {
+            await copyPlainText(input.value);
+            flashCopied(btn);
+        } catch (error) {
+            console.error(error);
+            alert('복사하지 못했습니다. 브라우저 권한이나 HTTPS/localhost 환경을 확인해주세요.');
+        }
+    };
+
+    const copyPreviewContent = async btn => {
+        try {
+            if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+                await navigator.clipboard.write([new ClipboardItem({
+                    'text/html': new Blob([preview.innerHTML], { type: 'text/html' }),
+                    'text/plain': new Blob([preview.innerText], { type: 'text/plain' })
+                })]);
+            } else {
+                await copyPlainText(preview.innerText);
+            }
+            flashCopied(btn);
+        } catch (error) {
+            try {
+                await copyPlainText(preview.innerText);
+                flashCopied(btn);
+            } catch (fallbackError) {
+                console.error(error, fallbackError);
+                alert('복사하지 못했습니다. 브라우저 권한이나 HTTPS/localhost 환경을 확인해주세요.');
+            }
+        }
     };
 
     const loadDocument = doc => {
@@ -576,8 +624,8 @@ document.addEventListener('DOMContentLoaded', () => {
             handleSave();
         }
     });
-    copyBtn.addEventListener('click', () => copyTo(copyBtn));
-    document.getElementById('copy-all-btn')?.addEventListener('click', e => copyTo(e.currentTarget));
+    copyBtn.addEventListener('click', () => copyEditorSource(copyBtn));
+    document.getElementById('copy-all-btn')?.addEventListener('click', e => copyPreviewContent(e.currentTarget));
     input.addEventListener('scroll', () => {
         const p = input.scrollTop / (input.scrollHeight - input.clientHeight);
         preview.scrollTop = p * (preview.scrollHeight - preview.clientHeight);
