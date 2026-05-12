@@ -147,6 +147,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return value;
     }
 
+    function normalizeMathImages() {
+        preview.querySelectorAll('img[src*="i.upmath.me"]').forEach(img => {
+            img.classList.add('latex-svg');
+            const isBlock = img.closest('.latex-block') || (
+                img.parentElement?.tagName === 'P' &&
+                img.parentElement.textContent.trim() === ''
+            );
+
+            img.style.maxWidth = '100%';
+            img.style.width = 'auto';
+            img.style.height = 'auto';
+            img.style.verticalAlign = 'middle';
+            img.style.display = 'inline-block';
+            img.style.margin = isBlock ? '0 auto' : '0 0.08em';
+        });
+    }
+
     const hydrateSvg = async () => {
         if (location.protocol === 'file:') return;
         const imgs = [...preview.querySelectorAll('img')].filter(i => isSvgPath(i.getAttribute('src') || ''));
@@ -196,6 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         preview.innerHTML = marked.parse(value);
 
+        normalizeMathImages();
         if (typeof LaTeXTable !== 'undefined') LaTeXTable.renderAll();
         hydrateSvg();
 

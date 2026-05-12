@@ -54,6 +54,12 @@ header {
     color: var(--text-secondary);
 }
 
+.app-version {
+    margin-left: 0.75rem;
+    color: #818cf8;
+    font-size: 0.75rem;
+}
+
 .logo {
     font-size: 1.25rem;
     font-weight: 600;
@@ -377,15 +383,17 @@ table:nth-of-type(2) th#diag {
 
 /* LaTeX SVG (via upmath.me) */
 .markdown-body img.latex-svg {
+    display: inline-block !important;
     vertical-align: middle;
     max-width: 100%;
     width: auto;
     height: auto;
+    margin: 0 0.08em !important;
 }
 
 .markdown-body img.latex-inline-svg {
-    display: inline-block;
-    margin: 0 0.08em;
+    display: inline-block !important;
+    margin: 0 0.08em !important;
 }
 
 .markdown-body .latex-block {
@@ -394,8 +402,8 @@ table:nth-of-type(2) th#diag {
 }
 
 .markdown-body .latex-block img.latex-block-svg {
-    display: inline-block;
-    margin: 0 auto;
+    display: inline-block !important;
+    margin: 0 auto !important;
 }
 
 /* Centered elements */
