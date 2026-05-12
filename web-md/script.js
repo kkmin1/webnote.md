@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function mathImg(formula, block) {
         const tex = block ? formula : `{\\textstyle ${formula}}`;
         const url = UPMATH + encodeURIComponent(tex);
-        const alt = formula.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        const alt = escapeHtml(formula);
         const modeClass = block ? 'latex-block-svg' : 'latex-inline-svg';
         const img = `<img src="${url}" alt="${alt}" class="latex-svg ${modeClass}">`;
         return block ? `<div class="latex-block">${img}</div>` : img;
@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         value = value.replace(/\\\(([\s\S]*?)\\\)/g, (_, f) => addMath(f, false));
         value = value.replace(/\\\s\(([\s\S]*?)\\\)/g, (_, f) => addMath(f, false));
         value = value.replace(/\$\$([\s\S]*?)\$\$/g, (_, f) => addMath(f, true));
+        value = replaceInlineDollarMath(value, addMath);
 
         value = value.replace(/\x01M(\d+)\x01/g, (_, i) => {
             const m = mathPh[+i];
@@ -145,6 +146,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
         value = value.replace(/\x00C(\d+)\x00/g, (_, i) => codePh[+i]);
         return value;
+    }
+
+    function replaceInlineDollarMath(value, addMath) {
+        let out = '';
+        let i = 0;
+        while (i < value.length) {
+            if (value[i] !== '$' || value[i - 1] === '\\') {
+                out += value[i++];
+                continue;
+            }
+
+            const first = value[i + 1];
+            if (!first || first === '$' || /\s|\d/.test(first)) {
+                out += value[i++];
+                continue;
+            }
+
+            let end = -1;
+            for (let j = i + 1; j < value.length; j++) {
+                if (value[j] === '\n') break;
+                if (value[j] === '$' && value[j - 1] !== '\\') {
+                    end = j;
+                    break;
+                }
+            }
+
+            if (end < 0) {
+                out += value[i++];
+                continue;
+            }
+
+            const formula = value.slice(i + 1, end);
+            if (!formula.trim() || /\s$/.test(formula)) {
+                out += value.slice(i, end + 1);
+            } else {
+                out += addMath(formula, false);
+            }
+            i = end + 1;
+        }
+        return out;
     }
 
     function normalizeMathImages() {
