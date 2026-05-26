@@ -67,6 +67,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const openLinkOutsideApp = async href => {
+        if (!href || href.startsWith('#')) return false;
+        const url = new URL(href, currentFilePath || location.href).href;
+        if (isDesktop && window.desktopApi?.openExternal) {
+            await window.desktopApi.openExternal(url);
+            return true;
+        }
+        window.open(url, '_blank', 'noopener');
+        return true;
+    };
+
+    const handlePreviewLinkClick = event => {
+        const link = event.target.closest?.('a[href]');
+        if (!link || !preview.contains(link)) return;
+
+        const href = link.getAttribute('href') || '';
+        if (href.startsWith('#')) return;
+
+        event.preventDefault();
+        openLinkOutsideApp(href).catch(error => {
+            console.error(error);
+            alert('링크를 열지 못했습니다.');
+        });
+    };
+
     function filePathToFileUrl(filePath) {
         const normalized = String(filePath ?? '').replace(/\\/g, '/');
         return `file:///${normalized.replace(/^\/+/, '')}`;
@@ -721,6 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveBtn?.addEventListener('click', () => handleSave());
     saveAsBtn?.addEventListener('click', () => handleSaveAs());
     previewFullscreenBtn?.addEventListener('click', () => togglePreviewFullscreen());
+    preview.addEventListener('click', handlePreviewLinkClick);
     document.addEventListener('fullscreenchange', () => {
         setPreviewFullscreenState(document.fullscreenElement === previewPane);
     });

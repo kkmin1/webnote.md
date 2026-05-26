@@ -1,6 +1,7 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 let mainWindow = null;
 let pendingFilePath = null;
@@ -47,6 +48,18 @@ async function createWindow() {
             contextIsolation: true,
             nodeIntegration: false
         }
+    });
+
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url);
+        return { action: 'deny' };
+    });
+
+    const appEntryUrl = pathToFileURL(path.join(__dirname, 'index.html')).href;
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (url === appEntryUrl || url.startsWith(`${appEntryUrl}#`)) return;
+        event.preventDefault();
+        shell.openExternal(url);
     });
 
     await mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -206,6 +219,12 @@ ipcMain.handle('dialog:save-pdf', async (_event, payload) => {
     } finally {
         if (!pdfWindow.isDestroyed()) pdfWindow.close();
     }
+});
+
+ipcMain.handle('app:open-external', async (_event, url) => {
+    if (typeof url !== 'string' || !url.trim()) return false;
+    await shell.openExternal(url);
+    return true;
 });
 
 ipcMain.handle('app:get-launch-file', async () => {
