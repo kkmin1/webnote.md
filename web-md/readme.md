@@ -1,6 +1,6 @@
-# Web Markdown Editor
+# Markdown Preview Studio
 
-브라우저에서 바로 쓰는 Markdown 편집기입니다. 왼쪽에서 Markdown 원문을 편집하면 오른쪽에서 실시간 preview를 보여줍니다. 이미지, SVG, LaTeX 수식, LaTeX 표, PDF 저장, 원문/preview 복사를 지원합니다.
+브라우저와 Windows 데스크톱 앱에서 쓰는 Markdown 편집기입니다. 왼쪽에서 Markdown 원문을 편집하면 오른쪽에서 실시간 preview를 보여줍니다. 이미지, SVG, LaTeX 수식, LaTeX 표, PDF 저장, 원문/preview 복사, preview 전체화면을 지원합니다.
 
 ## 실행
 
@@ -48,6 +48,7 @@ npm run serve:web
 - `serve_local.py`: 로컬 문서와 이미지 자산을 열기 위한 서버
 - `server.js`: Node 기반 정적/문서 API 서버
 - `package.json`: Electron 앱 실행과 Windows 빌드 설정
+- `build/icon.svg`, `build/icon.ico`: 앱 아이콘 원본과 Windows 빌드용 아이콘
 - `main.js`: Electron 메인 프로세스
 - `preload.js`: Electron renderer에 안전하게 노출하는 desktop API
 
@@ -117,11 +118,11 @@ A & B \\ \hline
 
 `index.html`은 `script.js?v=13`, `style.css?v=13`, `latex.js?v=13`처럼 버전 쿼리를 붙여 브라우저 캐시를 피합니다. JS/CSS를 고친 뒤 브라우저가 예전 동작을 보이면 버전 숫자를 올리고 강력 새로고침하세요.
 
-화면 안내 문구 옆의 `web-md v13` 표식은 현재 로드된 HTML 버전을 확인하기 위한 표시입니다.
+화면 안내 문구 옆의 `Markdown Preview Studio v2.1.0` 표식은 현재 로드된 앱 버전을 확인하기 위한 표시입니다.
 
 ## Electron 앱
 
-이 폴더는 웹 실행과 Electron 앱 빌드를 한곳에서 처리합니다. 예전 `md-viewer` 폴더의 앱 배포용 파일을 이 폴더로 통합했습니다.
+이 폴더는 웹 실행과 Electron 앱 빌드를 한곳에서 처리합니다. 앱 표시 이름은 `Markdown Preview Studio`이고, Windows 빌드에는 `build/icon.ico` 아이콘을 사용합니다.
 
 개발 모드:
 

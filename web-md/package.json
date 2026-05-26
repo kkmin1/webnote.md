@@ -1,7 +1,7 @@
 {
   "name": "web-md",
-  "version": "2.0.0",
-  "description": "Desktop Markdown editor with LaTeX, SVG, and Windows file association support.",
+  "version": "2.1.0",
+  "description": "Markdown Preview Studio is a desktop Markdown editor with LaTeX, SVG, fullscreen preview, and Windows file association support.",
   "main": "main.js",
   "author": "kkmin1",
   "license": "MIT",
@@ -13,7 +13,7 @@
   },
   "build": {
     "appId": "com.kkmin1.webmd",
-    "productName": "Web Markdown Editor",
+    "productName": "Markdown Preview Studio",
     "files": [
       "index.html",
       "script.js",
@@ -33,10 +33,17 @@
       "buildResources": "build"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName} Portable ${version}.${ext}"
     },
     "fileAssociations": [
       {
