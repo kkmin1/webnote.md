@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('markdown-input');
     const preview = document.getElementById('keep-preview');
+    const previewPane = document.querySelector('.preview-pane');
+    const previewFullscreenBtn = document.getElementById('preview-fullscreen-btn');
     const copyBtn = document.getElementById('copy-btn');
     const openFileBtn = document.getElementById('open-file-btn');
     const openFolderBtn = document.getElementById('open-folder-btn');
@@ -33,6 +35,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const isWindowsAbsolutePath = value => /^[a-z]:[\\/]/i.test(String(value ?? ''));
     const normalizeRelPath = value => String(value ?? '').replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '');
     const isApiDocumentPath = value => hasDocumentApi && typeof value === 'string' && value.includes(':\\');
+
+    const setPreviewFullscreenState = active => {
+        document.body.classList.toggle('preview-fullscreen', active);
+        if (!previewFullscreenBtn) return;
+        previewFullscreenBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        previewFullscreenBtn.textContent = active ? '전체화면 종료' : '전체화면';
+        previewFullscreenBtn.title = active ? '마크다운 보기 전체화면 종료' : '마크다운 보기 전체화면';
+    };
+
+    const togglePreviewFullscreen = async () => {
+        if (!previewPane) return;
+        const isActive = document.fullscreenElement === previewPane ||
+            document.body.classList.contains('preview-fullscreen');
+
+        if (isActive) {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            }
+            setPreviewFullscreenState(false);
+            return;
+        }
+
+        setPreviewFullscreenState(true);
+        if (previewPane.requestFullscreen) {
+            try {
+                await previewPane.requestFullscreen();
+            } catch (error) {
+                console.warn('Fullscreen API failed; using preview-only layout.', error);
+            }
+        }
+    };
 
     function filePathToFileUrl(filePath) {
         const normalized = String(filePath ?? '').replace(/\\/g, '/');
@@ -687,7 +720,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     saveBtn?.addEventListener('click', () => handleSave());
     saveAsBtn?.addEventListener('click', () => handleSaveAs());
+    previewFullscreenBtn?.addEventListener('click', () => togglePreviewFullscreen());
+    document.addEventListener('fullscreenchange', () => {
+        setPreviewFullscreenState(document.fullscreenElement === previewPane);
+    });
     document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.body.classList.contains('preview-fullscreen')) {
+            setPreviewFullscreenState(false);
+            return;
+        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
             e.preventDefault();
             handleSave();
