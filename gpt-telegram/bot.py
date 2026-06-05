@@ -3,14 +3,18 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
+import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from html import escape
 from pathlib import Path
 from typing import Any
 from urllib import parse, request
@@ -18,6 +22,7 @@ from urllib import parse, request
 
 ROOT = Path(__file__).resolve().parent
 STATE_PATH = ROOT / ".bot_state.json"
+SINGLE_INSTANCE_MUTEX = f"gpt-telegram-bot-{ROOT.resolve().as_posix().replace('/', '_').replace(':', '')}"
 
 
 def load_env_file(path: Path) -> None:
@@ -63,14 +68,128 @@ def post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None 
         return json.loads(resp.read().decode("utf-8"))
 
 
-def send_telegram_message(token: str, chat_id: int, text: str) -> None:
+def post_multipart(
+    url: str,
+    fields: dict[str, str],
+    files: dict[str, tuple[str, bytes, str]],
+    timeout: int = 300,
+) -> Any:
+    boundary = f"----gpt-telegram-{int(time.time() * 1000)}"
+    chunks: list[bytes] = []
+    for key, value in fields.items():
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(f"Content-Disposition: form-data; name=\"{key}\"\r\n\r\n".encode("utf-8"))
+        chunks.append(value.encode("utf-8"))
+        chunks.append(b"\r\n")
+    for key, (filename, content, content_type) in files.items():
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(
+            f"Content-Disposition: form-data; name=\"{key}\"; filename=\"{filename}\"\r\n".encode("utf-8")
+        )
+        chunks.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+        chunks.append(content)
+        chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    req = request.Request(
+        url,
+        data=b"".join(chunks),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def telegram_html(text: str) -> str:
+    escaped = escape(text or "", quote=False)
+    escaped = re.sub(
+        r"```(?:[A-Za-z0-9_+-]+)?\n?(.*?)```",
+        lambda m: f"<pre>{m.group(1).strip()}</pre>",
+        escaped,
+        flags=re.DOTALL,
+    )
+    escaped = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", escaped)
+    escaped = re.sub(r"(?m)^(#{1,6})\s+(.+)$", r"<b>\2</b>", escaped)
+    escaped = re.sub(r"\*\*([^*\n]+)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"__([^_\n]+)__", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", escaped)
+    escaped = re.sub(r"(?<!_)_([^_\n]+)_(?!_)", r"<i>\1</i>", escaped)
+    escaped = re.sub(
+        r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)",
+        r'<a href="\2">\1</a>',
+        escaped,
+    )
+    return escaped
+
+
+def send_telegram_message(token: str, chat_id: int, text: str) -> Any:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": text[:4000],
+        "text": telegram_html(text[:3900]),
+        "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    post_json(url, payload, timeout=60)
+    return post_json(url, payload, timeout=60)
+
+
+def split_telegram_text(text: str, limit: int = 3900) -> list[str]:
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    remaining = text
+    while len(remaining) > limit:
+        cut = remaining.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = remaining.rfind(" ", 0, limit)
+        if cut < limit // 2:
+            cut = limit
+        chunks.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
+def send_telegram_response(token: str, chat_id: int, text: str) -> None:
+    chunks = split_telegram_text(text)
+    for index, chunk in enumerate(chunks, 1):
+        if len(chunks) > 1:
+            chunk = f"[{index}/{len(chunks)}]\n{chunk}"
+        send_telegram_message(token, chat_id, chunk)
+
+
+def edit_telegram_message(token: str, chat_id: int, message_id: int, text: str) -> Any:
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": telegram_html(text[:3900]),
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    return post_json(url, payload, timeout=60)
+
+
+def delete_telegram_message(token: str, chat_id: int, message_id: int) -> Any:
+    url = f"https://api.telegram.org/bot{token}/deleteMessage"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+    }
+    return post_json(url, payload, timeout=60)
+
+
+def send_telegram_document(token: str, chat_id: int, path: Path, caption: str | None = None) -> Any:
+    content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    fields = {"chat_id": str(chat_id)}
+    if caption:
+        fields["caption"] = caption[:1024]
+    return post_multipart(
+        f"https://api.telegram.org/bot{token}/sendDocument",
+        fields,
+        {"document": (path.name, path.read_bytes(), content_type)},
+    )
 
 
 def send_telegram_chat_action(token: str, chat_id: int, action: str) -> None:
@@ -115,6 +234,104 @@ def truncate(text: str, limit: int) -> str:
     return f"{text[:limit]}\n\n... truncated {omitted} chars ..."
 
 
+class SingleInstanceGuard:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self._handle = None
+
+    def acquire(self) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        handle = kernel32.CreateMutexW(None, False, self.name)
+        if not handle:
+            error = ctypes.get_last_error()
+            if error in (5, 183):
+                raise RuntimeError("Another bot instance is already running")
+            raise RuntimeError(f"Failed to create single-instance mutex: error={error}")
+        self._handle = handle
+        if ctypes.get_last_error() == 183:
+            kernel32.CloseHandle(handle)
+            self._handle = None
+            raise RuntimeError("Another bot instance is already running")
+
+    def release(self) -> None:
+        if self._handle:
+            ctypes.windll.kernel32.CloseHandle(self._handle)
+            self._handle = None
+
+
+class WindowsSleepBlocker:
+    """Keep Windows awake for a limited time after Telegram activity."""
+
+    ES_CONTINUOUS = 0x80000000
+    ES_SYSTEM_REQUIRED = 0x00000001
+
+    def __init__(self, default_seconds: int) -> None:
+        self.default_seconds = max(0, default_seconds)
+        self.enabled = os.name == "nt" and self.default_seconds > 0
+        self.active_until = 0.0
+        self.blocking = False
+        self.lock = threading.Lock()
+        self.stop_event = threading.Event()
+        self.thread: threading.Thread | None = None
+        if self.enabled:
+            self.thread = threading.Thread(target=self._watchdog, daemon=True)
+            self.thread.start()
+
+    def request(self, seconds: int | None = None) -> None:
+        if not self.enabled:
+            return
+        duration = max(1, seconds or self.default_seconds)
+        with self.lock:
+            self.active_until = max(self.active_until, time.monotonic() + duration)
+            if not self.blocking:
+                try:
+                    self._set_execution_state(self.ES_CONTINUOUS | self.ES_SYSTEM_REQUIRED)
+                except OSError as exc:
+                    print(f"sleep-blocker error: {exc}", file=sys.stderr)
+                    self.enabled = False
+                    return
+                self.blocking = True
+
+    def release(self) -> None:
+        if not self.enabled:
+            return
+        with self.lock:
+            self.active_until = 0.0
+            if self.blocking:
+                try:
+                    self._set_execution_state(self.ES_CONTINUOUS)
+                except OSError as exc:
+                    print(f"sleep-blocker release error: {exc}", file=sys.stderr)
+                self.blocking = False
+
+    def status(self) -> str:
+        if not self.enabled:
+            return "sleep-blocker disabled"
+        with self.lock:
+            if not self.blocking:
+                return "sleep-blocker idle"
+            remaining = max(0, int(self.active_until - time.monotonic()))
+        return f"sleep-blocker active ({remaining}s remaining)"
+
+    def close(self) -> None:
+        self.stop_event.set()
+        self.release()
+
+    def _watchdog(self) -> None:
+        while not self.stop_event.wait(15):
+            with self.lock:
+                expired = self.blocking and time.monotonic() >= self.active_until
+            if expired:
+                self.release()
+
+    def _set_execution_state(self, flags: int) -> None:
+        result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
+        if result == 0:
+            raise OSError("SetThreadExecutionState failed")
+
+
 class WorkspaceBot:
     def __init__(self) -> None:
         load_env_file(ROOT / ".env")
@@ -127,13 +344,18 @@ class WorkspaceBot:
         self.poll_timeout = optional_int("POLL_TIMEOUT_SECONDS", 30)
         self.command_timeout = optional_int("COMMAND_TIMEOUT_SECONDS", 120)
         self.codex_timeout = optional_int("CODEX_TIMEOUT_SECONDS", 900)
+        self.keep_awake_seconds = optional_int("KEEP_AWAKE_SECONDS", 1800)
         self.max_file_chars = optional_int("MAX_FILE_CHARS", 24000)
         self.max_output_chars = optional_int("MAX_OUTPUT_CHARS", 12000)
+        self.instance_guard = SingleInstanceGuard(SINGLE_INSTANCE_MUTEX)
+        self.instance_guard.acquire()
         self.state = load_state()
         self.state_lock = threading.Lock()
         self.busy_chats: set[str] = set()
         self.busy_lock = threading.Lock()
+        self.stop_requested = False
         self.codex_executable = self.resolve_codex_executable()
+        self.sleep_blocker = WindowsSleepBlocker(self.keep_awake_seconds)
 
     def resolve_codex_executable(self) -> str:
         if os.name == "nt" and shutil.which("codex.cmd"):
@@ -142,15 +364,28 @@ class WorkspaceBot:
 
     def run(self) -> None:
         print(f"workspace_root={self.workspace_root}")
-        while True:
-            try:
-                self.poll_once()
-            except KeyboardInterrupt:
-                print("stopped")
-                raise
-            except Exception as exc:  # pragma: no cover - resilience path
-                print(f"loop error: {exc}", file=sys.stderr)
-                time.sleep(3)
+        try:
+            send_telegram_message(
+                self.telegram_token,
+                int(self.allowed_chat_id),
+                "codex-bot server start!\nI'm ready.",
+            )
+        except Exception:
+            pass
+        try:
+            while not self.stop_requested:
+                try:
+                    self.poll_once()
+                except KeyboardInterrupt:
+                    print("stopped")
+                    raise
+                except Exception as exc:  # pragma: no cover - resilience path
+                    print(f"loop error: {exc}", file=sys.stderr)
+                    time.sleep(3)
+        finally:
+            self.sleep_blocker.close()
+            self.instance_guard.release()
+        print("stop requested; exiting")
 
     def poll_once(self) -> None:
         offset = int(self.state.get("update_offset", 0))
@@ -158,7 +393,7 @@ class WorkspaceBot:
             {
                 "timeout": self.poll_timeout,
                 "offset": offset,
-                "allowed_updates": json.dumps(["message"]),
+                "allowed_updates": json.dumps(["message", "channel_post"]),
             }
         )
         url = f"https://api.telegram.org/bot{self.telegram_token}/getUpdates?{params}"
@@ -170,7 +405,7 @@ class WorkspaceBot:
             self.handle_update(update)
 
     def handle_update(self, update: dict[str, Any]) -> None:
-        message = update.get("message", {})
+        message = update.get("message") or update.get("channel_post") or {}
         chat = message.get("chat", {})
         chat_id = normalize_chat_id(chat.get("id", ""))
         text = (message.get("text") or "").strip()
@@ -187,17 +422,23 @@ class WorkspaceBot:
                 pass
             return
 
+        self.sleep_blocker.request()
         reply = self.dispatch(chat_id, text)
         if reply:
-            send_telegram_message(self.telegram_token, int(chat_id), reply)
+            send_telegram_response(self.telegram_token, int(chat_id), reply)
 
     def dispatch(self, chat_id: str, text: str) -> str:
         if text.startswith("/help"):
             return self.help_text()
         if text.startswith("/ping"):
             return self.ping_text(chat_id)
+        if text.startswith("/stop"):
+            self.stop_requested = True
+            return "codex-bot server stop requested."
         if text.startswith("/pwd"):
             return str(self.workspace_root)
+        if text.startswith("/sendfile "):
+            return self.send_file_command(chat_id, text[len("/sendfile ") :])
         if text.startswith("/read "):
             return self.read_file(text[len("/read ") :])
         if text.startswith("/run "):
@@ -229,7 +470,9 @@ class WorkspaceBot:
             "Commands:\n"
             "/help - show commands\n"
             "/ping - show alive and busy status\n"
+            "/stop - stop this bot server after sending the reply\n"
             "/pwd - show workspace root\n"
+            "/sendfile <path> - send a file to Telegram\n"
             "/read <path> - read a file inside WORKSPACE_ROOT\n"
             "/run <command> - run a shell command in WORKSPACE_ROOT\n"
             "/test <command> - run a test command in WORKSPACE_ROOT\n"
@@ -240,7 +483,7 @@ class WorkspaceBot:
         )
 
     def ping_text(self, chat_id: str) -> str:
-        return f"alive / {self.chat_status(chat_id)}"
+        return f"alive / {self.chat_status(chat_id)} / {self.sleep_blocker.status()}"
 
     def chat_status(self, chat_id: str) -> str:
         with self.busy_lock:
@@ -248,25 +491,47 @@ class WorkspaceBot:
                 return "busy"
         return "idle"
 
+    def send_file_command(self, chat_id: str, raw_path: str) -> str:
+        try:
+            path = safe_resolve(self.workspace_root, raw_path)
+        except ValueError as exc:
+            return f"sendfile blocked: {exc}"
+        if not path.exists():
+            return f"not found: {path}"
+        if path.is_dir():
+            return "sendfile target is a directory"
+        if path.stat().st_size > 49 * 1024 * 1024:
+            return "file too large for Telegram bot upload limit"
+        send_telegram_document(self.telegram_token, int(chat_id), path, caption=path.name)
+        return f"sent: {path.name}"
+
     def start_background_job(self, chat_id: str, job: Any) -> str:
         with self.busy_lock:
             if chat_id in self.busy_chats:
                 return "이전 작업이 아직 실행 중입니다"
             self.busy_chats.add(chat_id)
 
+        self.sleep_blocker.request(max(self.keep_awake_seconds, self.codex_timeout + 60))
+        status_message_id = None
+        try:
+            status = send_telegram_message(self.telegram_token, int(chat_id), "작업중.")
+            status_message_id = status.get("result", {}).get("message_id")
+        except Exception:
+            status_message_id = None
+
         worker = threading.Thread(
             target=self.run_background_job,
-            args=(chat_id, job),
+            args=(chat_id, job, status_message_id),
             daemon=True,
         )
         worker.start()
-        return "연결됨. 처리 시작합니다."
+        return ""
 
-    def run_background_job(self, chat_id: str, job: Any) -> None:
+    def run_background_job(self, chat_id: str, job: Any, status_message_id: int | None) -> None:
         done = threading.Event()
         heartbeat = threading.Thread(
-            target=self.send_typing_until_done,
-            args=(int(chat_id), done),
+            target=self.update_busy_message_until_done,
+            args=(int(chat_id), status_message_id, done),
             daemon=True,
         )
         heartbeat.start()
@@ -279,16 +544,56 @@ class WorkspaceBot:
             with self.busy_lock:
                 self.busy_chats.discard(chat_id)
 
-        if reply:
-            send_telegram_message(self.telegram_token, int(chat_id), reply)
-
-    def send_typing_until_done(self, chat_id: int, done: threading.Event) -> None:
-        while not done.is_set():
+        if status_message_id is not None:
             try:
-                send_telegram_chat_action(self.telegram_token, chat_id, "typing")
+                delete_telegram_message(self.telegram_token, int(chat_id), status_message_id)
             except Exception:
                 pass
-            done.wait(4)
+
+        if reply:
+            for file_path in self.extract_send_file_paths(reply):
+                try:
+                    path = safe_resolve(self.workspace_root, file_path)
+                    if path.exists() and path.is_file():
+                        send_telegram_document(self.telegram_token, int(chat_id), path, caption=path.name)
+                except Exception as exc:
+                    send_telegram_message(self.telegram_token, int(chat_id), f"SEND_FILE failed: {file_path}\n{exc}")
+            send_telegram_response(self.telegram_token, int(chat_id), self.clean_send_file_markers(reply))
+
+    def extract_send_file_paths(self, text: str) -> list[str]:
+        paths: list[str] = []
+        for line in (text or "").splitlines():
+            match = re.match(r"^\s*SEND_FILE\s*:\s*(.+?)\s*$", line, flags=re.IGNORECASE)
+            if match:
+                paths.append(match.group(1).strip().strip('"'))
+        return paths
+
+    def clean_send_file_markers(self, text: str) -> str:
+        lines = [
+            line
+            for line in (text or "").splitlines()
+            if not re.match(r"^\s*SEND_FILE\s*:", line, flags=re.IGNORECASE)
+        ]
+        return "\n".join(lines).strip()
+
+    def update_busy_message_until_done(
+        self, chat_id: int, message_id: int | None, done: threading.Event
+    ) -> None:
+        if message_id is None:
+            return
+        step = 1
+        while not done.is_set():
+            try:
+                edit_telegram_message(
+                    self.telegram_token,
+                    chat_id,
+                    message_id,
+                    f"작업중{'.' * step}",
+                )
+            except Exception:
+                pass
+            step = 1 if step >= 5 else step + 1
+            done.wait(1)
 
     def read_file(self, raw_path: str) -> str:
         try:
@@ -422,7 +727,13 @@ class WorkspaceBot:
             thread_id = self.extract_thread_id(stdout)
 
             if result.returncode != 0:
-                detail = stdout.strip() or stderr.strip() or f"codex exit_code={result.returncode}"
+                detail = (
+                    self.extract_codex_error(stdout)
+                    or self.extract_codex_error(stderr)
+                    or stdout.strip()
+                    or stderr.strip()
+                    or f"codex exit_code={result.returncode}"
+                )
                 return None, thread_id, truncate(detail, self.max_output_chars)
 
             reply = ""
@@ -487,6 +798,23 @@ class WorkspaceBot:
                 continue
             if payload.get("type") == "thread.started":
                 return payload.get("thread_id")
+        return None
+
+    def extract_codex_error(self, output: str) -> str | None:
+        for line in (output or "").splitlines():
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if payload.get("type") == "error" and payload.get("message"):
+                return str(payload["message"]).strip()
+            if payload.get("type") == "turn.failed":
+                error = payload.get("error") or {}
+                if isinstance(error, dict) and error.get("message"):
+                    return str(error["message"]).strip()
         return None
 
     def extract_last_agent_message(self, stdout: str) -> str:
