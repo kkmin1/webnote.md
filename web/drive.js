@@ -106,21 +106,19 @@ async function driveFetch(url, options = {}) {
 }
 
 async function ensureDriveAppFolder() {
-    const savedFolderId = localStorage.getItem(DRIVE_FOLDER_ID_KEY);
-    if (savedFolderId) return savedFolderId;
-
     const query = [
         `name = '${escapeDriveQuery(DRIVE_APP_FOLDER_NAME)}'`,
         `mimeType = 'application/vnd.google-apps.folder'`,
         'trashed = false'
     ].join(' and ');
-    const existing = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`)
+    const existing = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,modifiedTime)&pageSize=100`)
         .then(r => r.json());
     if (existing.files && existing.files.length > 0) {
-        localStorage.setItem(DRIVE_FOLDER_ID_KEY, existing.files[0].id);
-        driveFolderIndex['/'] = existing.files[0].id;
+        const folder = await selectBestDriveAppFolder(existing.files);
+        localStorage.setItem(DRIVE_FOLDER_ID_KEY, folder.id);
+        driveFolderIndex['/'] = folder.id;
         saveDriveFolderIndex();
-        return existing.files[0].id;
+        return folder.id;
     }
 
     const created = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
@@ -135,6 +133,35 @@ async function ensureDriveAppFolder() {
     driveFolderIndex['/'] = created.id;
     saveDriveFolderIndex();
     return created.id;
+}
+
+async function selectBestDriveAppFolder(folders) {
+    const savedFolderId = localStorage.getItem(DRIVE_FOLDER_ID_KEY);
+    let best = null;
+    for (const folder of folders) {
+        const fileCount = await countDriveFilesInFolder(folder.id);
+        const score = fileCount * 10000000000000 + Date.parse(folder.modifiedTime || 0);
+        if (!best || score > best.score || (folder.id === savedFolderId && score === best.score)) {
+            best = {folder, score};
+        }
+    }
+    return best.folder;
+}
+
+async function countDriveFilesInFolder(folderId) {
+    const query = `'${folderId}' in parents and trashed = false`;
+    const fields = 'files(id,mimeType)';
+    const response = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&pageSize=1000`)
+        .then(r => r.json());
+    let count = 0;
+    for (const entry of response.files || []) {
+        if (entry.mimeType === 'application/vnd.google-apps.folder') {
+            count += await countDriveFilesInFolder(entry.id);
+        } else {
+            count++;
+        }
+    }
+    return count;
 }
 
 async function importGoogleDriveFiles(remoteFiles) {
