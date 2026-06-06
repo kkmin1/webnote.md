@@ -129,6 +129,7 @@ async function ensureDriveAppFolder() {
 
 async function importGoogleDriveFiles() {
     const remoteFiles = await listDriveNoteFiles();
+    const importedPaths = [];
     for (const file of remoteFiles) {
         const notePath = file.appProperties?.webnotePath;
         if (!notePath) continue;
@@ -140,13 +141,27 @@ async function importGoogleDriveFiles() {
             : blob;
         await write(notePath, content);
         driveIndex[notePath] = file.id;
+        importedPaths.push(notePath);
     }
     saveDriveIndex();
 
     if (remoteFiles.length > 0) {
         files = await loadLocalFiles(await getRootDirHandle(), true);
         await renderSidebar();
+        await refreshCurrentEditorAfterDriveImport(importedPaths);
     }
+}
+
+async function refreshCurrentEditorAfterDriveImport(importedPaths) {
+    if (!window.currentEditor || !currentEditor.path || !currentEditor.isClean()) {
+        return;
+    }
+    if (!importedPaths.includes(currentEditor.path)) {
+        return;
+    }
+
+    const el = currentEditor === editor2 ? 'editor2-textarea' : 'editor-textarea';
+    await openFile(currentEditor.path, false, el);
 }
 
 async function uploadAllLocalFilesToDrive() {
