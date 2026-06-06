@@ -56,9 +56,9 @@ async function syncGoogleDriveNow() {
     if (!isGoogleDriveConnected() || isDriveSyncing) return;
     isDriveSyncing = true;
     try {
-        await importGoogleDriveFiles();
+        const importedCount = await importGoogleDriveFiles();
         updateDriveButton();
-        showToast('Google Drive synced');
+        showToast(`Google Drive synced (${importedCount} files)`);
     } catch (error) {
         logError('Google Drive sync failed:', error);
     } finally {
@@ -177,15 +177,35 @@ async function importGoogleDriveFiles(remoteFiles) {
             ? await blob.text()
             : blob;
         await write(notePath, content);
+        await updateMemFileAfterDriveImport(notePath, content, blob);
         driveIndex[notePath] = file.id;
         importedPaths.push(notePath);
     }
     saveDriveIndex();
 
     if (remoteFiles.length > 0) {
-        files = await loadLocalFiles(await getRootDirHandle(), true);
         await renderSidebar();
         await refreshCurrentEditorAfterDriveImport(importedPaths);
+    }
+    return importedPaths.length;
+}
+
+async function updateMemFileAfterDriveImport(path, content, blob) {
+    const fileHandle = await getFileHandle(path);
+    const file = await fileHandle.getFile();
+    const ext = path.split('.').pop().toLowerCase();
+    const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+    const memFile = {
+        isFile: true,
+        content: typeof content === 'string' ? content : undefined,
+        lastModified: file.lastModified,
+        path: path,
+        handle: fileHandle,
+        imageUrl: isImage ? URL.createObjectURL(blob) : null
+    };
+    addMemFile(path, memFile);
+    if (isImage && mediaIndex) {
+        mediaIndex[toFilename(path)] = memFile;
     }
 }
 
@@ -197,8 +217,10 @@ async function refreshCurrentEditorAfterDriveImport(importedPaths) {
         return;
     }
 
-    const el = currentEditor === editor2 ? 'editor2-textarea' : 'editor-textarea';
-    await openFile(currentEditor.path, false, el);
+    const content = await read(currentEditor.path);
+    currentEditor.getDoc().setValue(toHeader(toFilename(currentEditor.path)) + '\n' + content);
+    currentEditor.clearHistory();
+    currentEditor.markClean();
 }
 
 async function uploadAllLocalFilesToDrive() {
