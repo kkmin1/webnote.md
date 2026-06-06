@@ -4,6 +4,7 @@ const DRIVE_FOLDER_ID_KEY = 'googleDriveFolderId';
 const DRIVE_FOLDER_INDEX_KEY = 'googleDriveFolderIndex';
 const DRIVE_APP_FOLDER_NAME = 'webnote.md';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_AUTO_IMPORT_INTERVAL = 10000;
 
 let driveTokenClient = null;
 let driveAccessToken = null;
@@ -52,13 +53,15 @@ async function connectGoogleDrive() {
     }
 }
 
-async function syncGoogleDriveNow() {
+async function syncGoogleDriveNow(options = {}) {
     if (!isGoogleDriveConnected() || isDriveSyncing) return;
     isDriveSyncing = true;
     try {
         const importedCount = await importGoogleDriveFiles();
         updateDriveButton();
-        showToast(`Google Drive synced (${importedCount} files)`);
+        if (!options.silent) {
+            showToast(`Google Drive synced (${importedCount} files)`);
+        }
     } catch (error) {
         logError('Google Drive sync failed:', error);
     } finally {
@@ -167,6 +170,7 @@ async function countDriveFilesInFolder(folderId) {
 async function importGoogleDriveFiles(remoteFiles) {
     remoteFiles = remoteFiles || await listDriveNoteFiles();
     const importedPaths = [];
+    const safeRefreshPaths = new Set();
     for (const file of remoteFiles) {
         const notePath = file.appProperties?.webnotePath;
         if (!notePath) continue;
@@ -176,6 +180,14 @@ async function importGoogleDriveFiles(remoteFiles) {
         const content = file.mimeType.startsWith('text/') || notePath.endsWith('.md')
             ? await blob.text()
             : blob;
+        const previousContent = await read(notePath).catch(() => null);
+        if (canRefreshOpenEditorFromDrive(notePath, previousContent)) {
+            safeRefreshPaths.add(notePath);
+        }
+        if (typeof content === 'string' && previousContent === content) {
+            driveIndex[notePath] = file.id;
+            continue;
+        }
         await write(notePath, content);
         await updateMemFileAfterDriveImport(notePath, content, blob);
         driveIndex[notePath] = file.id;
@@ -185,7 +197,7 @@ async function importGoogleDriveFiles(remoteFiles) {
 
     if (remoteFiles.length > 0) {
         await renderSidebar();
-        await refreshCurrentEditorAfterDriveImport(importedPaths);
+        await refreshOpenEditorsAfterDriveImport(importedPaths, safeRefreshPaths);
     }
     return importedPaths.length;
 }
@@ -209,18 +221,47 @@ async function updateMemFileAfterDriveImport(path, content, blob) {
     }
 }
 
-async function refreshCurrentEditorAfterDriveImport(importedPaths) {
-    if (!window.currentEditor || !currentEditor.path || !currentEditor.isClean()) {
-        return;
-    }
-    if (!importedPaths.includes(currentEditor.path)) {
-        return;
-    }
+function canRefreshOpenEditorFromDrive(path, previousContent) {
+    return canRefreshEditorFromDrive(editor, path, previousContent)
+        || canRefreshEditorFromDrive(editor2, path, previousContent);
+}
 
-    const content = await read(currentEditor.path);
-    currentEditor.getDoc().setValue(toHeader(toFilename(currentEditor.path)) + '\n' + content);
-    currentEditor.clearHistory();
-    currentEditor.markClean();
+function canRefreshEditorFromDrive(editorInstance, path, previousContent) {
+    if (!editorInstance || editorInstance.path !== path) return false;
+    if (editorInstance.isClean()) return true;
+    return typeof previousContent === 'string'
+        && getEditorContentForPath(editorInstance, path) === previousContent;
+}
+
+function getEditorContentForPath(editorInstance, path) {
+    let content = editorInstance.getValue();
+    const header = toHeader(toFilename(path)).toLowerCase();
+    if (content.toLowerCase().startsWith(header)) {
+        content = content.slice(`${header}\n`.length);
+    } else if (content.toLowerCase().startsWith('# ')) {
+        content = content.slice(`# \n`.length);
+    }
+    return content;
+}
+
+async function refreshOpenEditorsAfterDriveImport(importedPaths, safeRefreshPaths) {
+    let skippedDirtyEditor = false;
+    for (const editorInstance of [editor, editor2]) {
+        if (!editorInstance || !editorInstance.path) continue;
+        if (!importedPaths.includes(editorInstance.path)) continue;
+        if (!editorInstance.isClean() && !safeRefreshPaths.has(editorInstance.path)) {
+            skippedDirtyEditor = true;
+            continue;
+        }
+
+        const content = await read(editorInstance.path);
+        editorInstance.getDoc().setValue(toHeader(toFilename(editorInstance.path)) + '\n' + content);
+        editorInstance.clearHistory();
+        editorInstance.markClean();
+    }
+    if (skippedDirtyEditor) {
+        showToast('Drive changes imported; unsaved local editor was not replaced');
+    }
 }
 
 async function uploadAllLocalFilesToDrive() {
@@ -452,4 +493,17 @@ function mimeTypeForPath(path) {
     return types[ext] || 'application/octet-stream';
 }
 
+async function autoImportGoogleDriveChanges() {
+    if (!isGoogleDriveConnected()
+        || isDriveSyncing
+        || document.hidden
+        || !window.currentEditor
+        || !currentEditor.path
+        || !currentEditor.isClean()) {
+        return;
+    }
+    await syncGoogleDriveNow({silent: true});
+}
+
 document.addEventListener('DOMContentLoaded', updateDriveButton);
+setInterval(autoImportGoogleDriveChanges, DRIVE_AUTO_IMPORT_INTERVAL);
