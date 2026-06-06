@@ -47,7 +47,7 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="welcome.js?v="></script>
     <script src="files.js?v="></script>
-    <script src="drive.js?v=20260607-drive-folders"></script>
+    <script src="drive.js?v=20260607-drive-sync-fix"></script>
 </head>
 <body>
 
@@ -164,11 +164,11 @@
 <script src="chat.js?v="></script>
 <script src="modals.js?v="></script>
 <script>
-    window.COMMIT_HASH = '?v=20260607-drive-folders';
+    window.COMMIT_HASH = '?v=20260607-drive-sync-fix';
     log('Current version:', window.COMMIT_HASH);
 
     // Allow offline mode.
-    navigator.serviceWorker?.register('offline.js?v=20260607-drive-folders')
+    navigator.serviceWorker?.register('offline.js?v=20260607-drive-sync-fix')
         .then(() => log('Service Worker registered'))
         .catch(() => logError('Service Worker registration failed'));
 

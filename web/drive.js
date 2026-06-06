@@ -9,6 +9,7 @@ let driveTokenClient = null;
 let driveAccessToken = null;
 let driveIndex = JSON.parse(localStorage.getItem(DRIVE_INDEX_KEY) || '{}');
 let driveFolderIndex = JSON.parse(localStorage.getItem(DRIVE_FOLDER_INDEX_KEY) || '{}');
+let driveFolderPromises = {};
 let isDriveSyncing = false;
 
 function isGoogleDriveConnected() {
@@ -18,6 +19,11 @@ function isGoogleDriveConnected() {
 async function connectGoogleDrive() {
     if (location.protocol === 'file:') {
         alert('Google Drive sync requires opening Webnote.md from http://127.0.0.1, not file://.\n\nRun a local server and open http://127.0.0.1:8765/web/index.html');
+        return;
+    }
+
+    if (isGoogleDriveConnected()) {
+        await syncGoogleDriveNow();
         return;
     }
 
@@ -32,7 +38,12 @@ async function connectGoogleDrive() {
         await requestGoogleDriveToken(clientId);
         await ensureDriveAppFolder();
         if (isGoogleDriveConnected()) {
-            await syncGoogleDriveNow();
+            const remoteFiles = await listDriveNoteFiles();
+            if (remoteFiles.length === 0) {
+                await uploadAllLocalFilesToDrive();
+            } else {
+                await importGoogleDriveFiles(remoteFiles);
+            }
         }
         showToast('Google Drive connected');
     } catch (error) {
@@ -46,7 +57,6 @@ async function syncGoogleDriveNow() {
     isDriveSyncing = true;
     try {
         await importGoogleDriveFiles();
-        await uploadAllLocalFilesToDrive();
         updateDriveButton();
         showToast('Google Drive synced');
     } catch (error) {
@@ -127,8 +137,8 @@ async function ensureDriveAppFolder() {
     return created.id;
 }
 
-async function importGoogleDriveFiles() {
-    const remoteFiles = await listDriveNoteFiles();
+async function importGoogleDriveFiles(remoteFiles) {
+    remoteFiles = remoteFiles || await listDriveNoteFiles();
     const importedPaths = [];
     for (const file of remoteFiles) {
         const notePath = file.appProperties?.webnotePath;
@@ -167,13 +177,17 @@ async function refreshCurrentEditorAfterDriveImport(importedPaths) {
 async function uploadAllLocalFilesToDrive() {
     if (!isGoogleDriveConnected() || !files) return;
 
-    const uploads = [];
+    const paths = [];
     walk(files, path => {
         const file = getMemFile(path);
         if (!file || !file.handle) return;
-        uploads.push(uploadFileHandleToDrive(path, file.handle));
+        paths.push(path);
     });
-    await Promise.allSettled(uploads);
+    for (const path of paths) {
+        const file = getMemFile(path);
+        if (!file || !file.handle) continue;
+        await uploadFileHandleToDrive(path, file.handle);
+    }
 }
 
 async function uploadCurrentFileToDrive(path, content) {
@@ -264,13 +278,11 @@ async function collectDriveFiles(entries, output) {
 }
 
 async function findDriveFileByPath(path) {
-    const folderId = await ensureDriveAppFolder();
     const query = [
-        `'${folderId}' in parents`,
         `appProperties has { key='webnotePath' and value='${escapeDriveQuery(path)}' }`,
         'trashed = false'
     ].join(' and ');
-    const response = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)&pageSize=1`)
+    const response = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,parents)&pageSize=10`)
         .then(r => r.json());
     const id = response.files?.[0]?.id || null;
     if (id) {
@@ -285,7 +297,14 @@ async function ensureDriveFolderForPath(dirPath) {
     const normalizedDir = normalizeDriveDirPath(dirPath);
     if (normalizedDir === '/') return rootId;
     if (driveFolderIndex[normalizedDir]) return driveFolderIndex[normalizedDir];
+    if (driveFolderPromises[normalizedDir]) return await driveFolderPromises[normalizedDir];
 
+    driveFolderPromises[normalizedDir] = createDriveFolderPath(normalizedDir, rootId)
+        .finally(() => delete driveFolderPromises[normalizedDir]);
+    return await driveFolderPromises[normalizedDir];
+}
+
+async function createDriveFolderPath(normalizedDir, rootId) {
     const parts = normalizedDir.split('/').filter(Boolean);
     let parentId = rootId;
     let currentPath = '';
