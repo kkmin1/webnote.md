@@ -1,0 +1,9 @@
+.env
+.vscode/**
+.idea/**
+**/.DS_Store
+storage
+fslog
+tests/node_modules/
+tests/test-results/
+tests/playwright-report/
