@@ -842,6 +842,12 @@ window.addEventListener('focus', async () => {
         return;
     }
 
+    if (typeof isGoogleDriveConnected === 'function'
+        && isGoogleDriveConnected()
+        && currentEditor.isClean()) {
+        await importGoogleDriveFiles();
+    }
+
     document.getElementById('chat-input').focus();
 
     const savedDirectoryHandle = await getRootDirHandle();

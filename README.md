@@ -55,7 +55,7 @@ https://kkmin1.github.io/webnote.md/web/index.html
 
 Google Drive를 외부 노트 저장소로 사용할 수 있습니다.
 
-앱은 Google Drive 안에 `webnote.md` 폴더를 만들고, 노트와 이미지를 그 안에 업로드합니다. 각 파일에는 원래 앱 내부 경로가 Drive `appProperties`로 저장됩니다. 예를 들면 `/Notes.md`, `/media/image.png` 같은 경로입니다.
+앱은 Google Drive 안에 `webnote.md` 폴더를 만들고, 노트와 이미지를 그 안에 업로드합니다. 이미지 파일은 Drive에서도 `webnote.md/media/` 하위 폴더에 저장됩니다. 각 파일에는 원래 앱 내부 경로가 Drive `appProperties`로 저장됩니다. 예를 들면 `/Notes.md`, `/media/image.png` 같은 경로입니다.
 
 ### Google Cloud 설정
 
@@ -128,8 +128,10 @@ Google Drive가 연결된 경우:
 
 - 로컬 저장은 그대로 유지됩니다.
 - 저장된 `.md` 파일이 Google Drive의 `webnote.md` 폴더로 업로드됩니다.
-- `media/` 폴더의 이미지도 Drive에 업로드됩니다.
+- `media/` 폴더의 이미지는 Drive의 `webnote.md/media/` 하위 폴더에 업로드됩니다.
 - 다른 기기에서 Drive 연결을 하면 Drive 파일을 다시 가져옵니다.
+- 이미 연결된 브라우저는 창에 다시 포커스가 돌아올 때 Drive 변경사항을 가져옵니다.
+- 상단 Google Drive 버튼을 다시 누르면 즉시 동기화를 시도합니다.
 
 현재 동기화는 단순 모델입니다. 여러 기기에서 같은 노트를 동시에 수정하면 마지막으로 업로드된 내용이 우선합니다.
 

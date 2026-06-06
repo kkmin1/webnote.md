@@ -1,12 +1,14 @@
 const DRIVE_CLIENT_ID_KEY = 'googleDriveClientId';
 const DRIVE_INDEX_KEY = 'googleDriveIndex';
 const DRIVE_FOLDER_ID_KEY = 'googleDriveFolderId';
+const DRIVE_FOLDER_INDEX_KEY = 'googleDriveFolderIndex';
 const DRIVE_APP_FOLDER_NAME = 'webnote.md';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 let driveTokenClient = null;
 let driveAccessToken = null;
 let driveIndex = JSON.parse(localStorage.getItem(DRIVE_INDEX_KEY) || '{}');
+let driveFolderIndex = JSON.parse(localStorage.getItem(DRIVE_FOLDER_INDEX_KEY) || '{}');
 let isDriveSyncing = false;
 
 function isGoogleDriveConnected() {
@@ -29,12 +31,28 @@ async function connectGoogleDrive() {
     try {
         await requestGoogleDriveToken(clientId);
         await ensureDriveAppFolder();
-        await importGoogleDriveFiles();
-        await uploadAllLocalFilesToDrive();
+        if (isGoogleDriveConnected()) {
+            await syncGoogleDriveNow();
+        }
         showToast('Google Drive connected');
     } catch (error) {
         logError('Google Drive connect failed:', error);
         alert('Google Drive 연결 실패: ' + (error.message || error));
+    }
+}
+
+async function syncGoogleDriveNow() {
+    if (!isGoogleDriveConnected() || isDriveSyncing) return;
+    isDriveSyncing = true;
+    try {
+        await importGoogleDriveFiles();
+        await uploadAllLocalFilesToDrive();
+        updateDriveButton();
+        showToast('Google Drive synced');
+    } catch (error) {
+        logError('Google Drive sync failed:', error);
+    } finally {
+        isDriveSyncing = false;
     }
 }
 
@@ -90,6 +108,8 @@ async function ensureDriveAppFolder() {
         .then(r => r.json());
     if (existing.files && existing.files.length > 0) {
         localStorage.setItem(DRIVE_FOLDER_ID_KEY, existing.files[0].id);
+        driveFolderIndex['/'] = existing.files[0].id;
+        saveDriveFolderIndex();
         return existing.files[0].id;
     }
 
@@ -102,6 +122,8 @@ async function ensureDriveAppFolder() {
         })
     }).then(r => r.json());
     localStorage.setItem(DRIVE_FOLDER_ID_KEY, created.id);
+    driveFolderIndex['/'] = created.id;
+    saveDriveFolderIndex();
     return created.id;
 }
 
@@ -140,14 +162,11 @@ async function uploadAllLocalFilesToDrive() {
 }
 
 async function uploadCurrentFileToDrive(path, content) {
-    if (!isGoogleDriveConnected() || isDriveSyncing) return;
-    isDriveSyncing = true;
+    if (!isGoogleDriveConnected()) return;
     try {
         await uploadBlobToDrive(path, new Blob([content], {type: 'text/markdown;charset=utf-8'}));
     } catch (error) {
         logError('Google Drive upload failed:', path, error);
-    } finally {
-        isDriveSyncing = false;
     }
 }
 
@@ -162,8 +181,8 @@ async function uploadFileHandleToDrive(path, fileHandle) {
 }
 
 async function uploadBlobToDrive(path, blob) {
-    const folderId = await ensureDriveAppFolder();
     const normalizedPath = path.startsWith('/') ? path : '/' + path;
+    const folderId = await ensureDriveFolderForPath(toDirPath(normalizedPath));
     const fileId = driveIndex[normalizedPath] || await findDriveFileByPath(normalizedPath);
     const metadata = {
         name: toFilename(normalizedPath),
@@ -198,11 +217,35 @@ async function uploadBlobToDrive(path, blob) {
 
 async function listDriveNoteFiles() {
     const folderId = await ensureDriveAppFolder();
-    const query = `'${folderId}' in parents and trashed = false`;
+    const query = [
+        `'${folderId}' in parents`,
+        'trashed = false'
+    ].join(' and ');
     const fields = 'files(id,name,mimeType,modifiedTime,appProperties)';
     const response = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&pageSize=1000`)
         .then(r => r.json());
-    return response.files || [];
+    const files = [];
+    await collectDriveFiles(response.files || [], files);
+    return files;
+}
+
+async function collectDriveFiles(entries, output) {
+    for (const entry of entries) {
+        if (entry.mimeType === 'application/vnd.google-apps.folder') {
+            const folderPath = entry.appProperties?.webnotePath;
+            if (folderPath) {
+                driveFolderIndex[folderPath] = entry.id;
+            }
+            const query = `'${entry.id}' in parents and trashed = false`;
+            const fields = 'files(id,name,mimeType,modifiedTime,appProperties)';
+            const children = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&pageSize=1000`)
+                .then(r => r.json());
+            await collectDriveFiles(children.files || [], output);
+        } else {
+            output.push(entry);
+        }
+    }
+    saveDriveFolderIndex();
 }
 
 async function findDriveFileByPath(path) {
@@ -222,17 +265,90 @@ async function findDriveFileByPath(path) {
     return id;
 }
 
+async function ensureDriveFolderForPath(dirPath) {
+    const rootId = await ensureDriveAppFolder();
+    const normalizedDir = normalizeDriveDirPath(dirPath);
+    if (normalizedDir === '/') return rootId;
+    if (driveFolderIndex[normalizedDir]) return driveFolderIndex[normalizedDir];
+
+    const parts = normalizedDir.split('/').filter(Boolean);
+    let parentId = rootId;
+    let currentPath = '';
+    for (const part of parts) {
+        currentPath = currentPath + '/' + part;
+        if (driveFolderIndex[currentPath]) {
+            parentId = driveFolderIndex[currentPath];
+            continue;
+        }
+
+        const existingId = await findDriveFolder(parentId, part, currentPath);
+        if (existingId) {
+            driveFolderIndex[currentPath] = existingId;
+            parentId = existingId;
+            saveDriveFolderIndex();
+            continue;
+        }
+
+        const created = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: part,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [parentId],
+                appProperties: {webnotePath: currentPath}
+            })
+        }).then(r => r.json());
+        driveFolderIndex[currentPath] = created.id;
+        parentId = created.id;
+        saveDriveFolderIndex();
+    }
+    return parentId;
+}
+
+async function findDriveFolder(parentId, name, path) {
+    const query = [
+        `'${parentId}' in parents`,
+        `name = '${escapeDriveQuery(name)}'`,
+        `mimeType = 'application/vnd.google-apps.folder'`,
+        'trashed = false'
+    ].join(' and ');
+    const response = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,appProperties)&pageSize=1`)
+        .then(r => r.json());
+    const folder = response.files?.[0];
+    if (!folder) return null;
+    if (!folder.appProperties?.webnotePath) {
+        await driveFetch(`https://www.googleapis.com/drive/v3/files/${folder.id}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({appProperties: {webnotePath: path}})
+        });
+    }
+    return folder.id;
+}
+
 function updateDriveButton() {
     const button = document.getElementById('drive-sync');
     if (!button) return;
     button.classList.toggle('drive-connected', isGoogleDriveConnected());
     button.title = isGoogleDriveConnected()
-        ? 'Google Drive connected'
+        ? 'Google Drive connected - click to sync now'
         : 'Connect Google Drive';
 }
 
 function saveDriveIndex() {
     localStorage.setItem(DRIVE_INDEX_KEY, JSON.stringify(driveIndex));
+}
+
+function saveDriveFolderIndex() {
+    localStorage.setItem(DRIVE_FOLDER_INDEX_KEY, JSON.stringify(driveFolderIndex));
+}
+
+function normalizeDriveDirPath(path) {
+    if (!path || path === '.') return '/';
+    let normalized = path.startsWith('/') ? path : '/' + path;
+    normalized = normalized.replace(/\/+/g, '/').replace(/\/$/, '');
+    return normalized || '/';
 }
 
 function escapeDriveQuery(value) {
