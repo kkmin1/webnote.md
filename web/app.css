@@ -126,6 +126,10 @@ body {
     stroke: var(--col-tx-alt);
 }
 
+#drive-sync.drive-connected svg {
+    stroke: var(--col-tx-hover);
+}
+
 #content {
     overflow: auto;
     width: 100%;

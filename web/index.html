@@ -44,8 +44,10 @@
     <script src="lib/emoji.js?v="></script>
     <script src="lib/fs.js?v="></script>
     <script src="lib/md.js?v="></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="welcome.js?v="></script>
     <script src="files.js?v="></script>
+    <script src="drive.js?v="></script>
 </head>
 <body>
 
@@ -80,6 +82,12 @@
         <button id="open-folder-btn" title="Open folder" onclick="openDir()">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 32 32">
                 <path stroke-linecap="round" stroke-width="2" d="M28 11v13a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h6c3 0 3 3 5 3h9.003C27.108 9 28 9.895 28 11z"/>
+            </svg>
+        </button>
+        <button id="drive-sync" title="Connect Google Drive" onclick="connectGoogleDrive()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="23" height="23" fill="none" viewBox="0 0 32 32">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.5 7h7l8 14-3.5 6H8l-3.5-6 8-14z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.5 7L8 27M19.5 7L24 27M4.5 21h23"/>
             </svg>
         </button>
         <button id="attach-image" title="Attach Image" onclick="selectImageAttachment()">

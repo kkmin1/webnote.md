@@ -44,6 +44,7 @@ const urlsToCache = [
     '/app.js',
     '/welcome.js',
     '/files.js',
+    '/drive.js',
     '/editor.js',
     '/chat.js',
     '/modals.js',

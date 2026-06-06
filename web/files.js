@@ -1386,6 +1386,9 @@ async function syncCurrentFile(switchAwayEditor = false) {
                 // Buffer is flushed on disk at this moment. It could be interrupted
                 // by the event loop, so we use isSaving guard.
                 await writable.close();
+                if (typeof uploadCurrentFileToDrive === 'function') {
+                    uploadCurrentFileToDrive(path, freshContent);
+                }
             } else {
                 // When could that happen?
                 if (file.handle) {

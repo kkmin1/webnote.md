@@ -465,6 +465,9 @@ async function insertImageAttachments(cm, imageFiles) {
                     path: `/media/${fileName}`
                 };
             }
+            if (typeof uploadFileHandleToDrive === 'function') {
+                uploadFileHandleToDrive(`/media/${fileName}`, fileHandle);
+            }
             inserted.push(`![${imageAltText(file.name)}](media/${fileName})`);
             log(`Image saved as: ${fileName}`);
         } catch (error) {

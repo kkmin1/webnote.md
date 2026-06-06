@@ -35,6 +35,18 @@ Files.md keeps your notes as plain Markdown, but the viewer can render more than
 - Write LaTeX math inline with `$E = mc^2$` or `\(E = mc^2\)`.
 - Write display math with `$$ ... $$` or `\[ ... \]`.
 
+## Google Drive sync
+Webnote.md can use Google Drive as the external note store.
+
+1. Create a Google Cloud OAuth 2.0 Web Client ID with the Drive API enabled.
+2. Add this app's origin, for example `http://127.0.0.1:8765`, to the OAuth client's authorized JavaScript origins.
+3. Open the app and click the Google Drive button in the toolbar.
+4. Paste the OAuth Web Client ID when prompted and approve Drive access.
+
+The app creates a `webnote.md` folder in Google Drive. Markdown files and images are uploaded there. Each Drive file stores its original app path, such as `/Notes.md` or `/media/image.png`, in Drive `appProperties` so another browser session can import the same note tree after connecting.
+
+The Drive scope is `drive.file`, so the app works with files it creates or opens through its own Drive integration instead of requesting full Drive access.
+
 ## Another note taking app? 
 Maybe. But this time:
 - Only necessary features, **restrictions foster creativity**
