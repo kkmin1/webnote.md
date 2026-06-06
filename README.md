@@ -38,6 +38,8 @@ Files.md keeps your notes as plain Markdown, but the viewer can render more than
 ## Google Drive sync
 Webnote.md can use Google Drive as the external note store.
 
+Google Drive sync does not work when the app is opened as `file:///.../index.html`. Run the app from a local HTTP server and open `http://127.0.0.1:8765/web/index.html`.
+
 1. Create a Google Cloud OAuth 2.0 Web Client ID with the Drive API enabled.
 2. Add this app's origin, for example `http://127.0.0.1:8765`, to the OAuth client's authorized JavaScript origins.
 3. Open the app and click the Google Drive button in the toolbar.

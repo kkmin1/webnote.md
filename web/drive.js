@@ -14,6 +14,11 @@ function isGoogleDriveConnected() {
 }
 
 async function connectGoogleDrive() {
+    if (location.protocol === 'file:') {
+        alert('Google Drive sync requires opening Webnote.md from http://127.0.0.1, not file://.\n\nRun a local server and open http://127.0.0.1:8765/web/index.html');
+        return;
+    }
+
     let clientId = localStorage.getItem(DRIVE_CLIENT_ID_KEY);
     if (!clientId) {
         clientId = prompt('Google OAuth Web Client ID:');
