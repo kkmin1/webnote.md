@@ -1,9 +1,11 @@
 import cv2
 import yt_dlp
 import os
+import re
 
 def download_and_capture(video_url, interval_seconds=60, folder_name="captures"):
-    output_folder = os.path.join("captures", folder_name)
+    safe_folder_name = re.sub(r'[^\w\-_\.]', '_', folder_name)
+    output_folder = os.path.join("captures", safe_folder_name)
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
