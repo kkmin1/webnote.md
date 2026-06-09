@@ -31,10 +31,10 @@ def download_and_capture(video_url, interval_seconds=60, folder_name="captures")
             break
             
         if frame_id % interval_frames == 0:
-            minute = count
-            output_path = os.path.join(output_folder, f"capture_{minute}m.jpg")
+            seconds = count * interval_seconds
+            output_path = os.path.join(output_folder, f"capture_{seconds}s.jpg")
             cv2.imwrite(output_path, frame)
-            print(f"{minute}분 시점 캡처 완료: {output_path}")
+            print(f"{seconds}초 시점 캡처 완료: {output_path}")
             count += 1
             
         frame_id += 1
