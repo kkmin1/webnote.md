@@ -6,6 +6,10 @@ const DRIVE_APP_FOLDER_NAME = 'webnote.md';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE_AUTO_IMPORT_INTERVAL = 10000;
 
+const DRIVE_TOKEN_KEY = 'googleDriveAccessToken';
+const DRIVE_TOKEN_EXPIRY_KEY = 'googleDriveTokenExpiry';
+const DRIVE_REDIRECT_PENDING_KEY = 'googleDriveRedirectPending';
+
 let driveTokenClient = null;
 let driveAccessToken = null;
 let driveIndex = JSON.parse(localStorage.getItem(DRIVE_INDEX_KEY) || '{}');
@@ -13,8 +17,81 @@ let driveFolderIndex = JSON.parse(localStorage.getItem(DRIVE_FOLDER_INDEX_KEY) |
 let driveFolderPromises = {};
 let isDriveSyncing = false;
 
+function isMobileBrowser() {
+    return /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
 function isGoogleDriveConnected() {
     return !!driveAccessToken;
+}
+
+function restoreDriveTokenFromSession() {
+    const token = sessionStorage.getItem(DRIVE_TOKEN_KEY);
+    const expiry = parseInt(sessionStorage.getItem(DRIVE_TOKEN_EXPIRY_KEY) || '0', 10);
+    if (token && expiry && Date.now() < expiry) {
+        driveAccessToken = token;
+        return true;
+    }
+    sessionStorage.removeItem(DRIVE_TOKEN_KEY);
+    sessionStorage.removeItem(DRIVE_TOKEN_EXPIRY_KEY);
+    return false;
+}
+
+function saveDriveTokenToSession(token, expiresInSeconds) {
+    driveAccessToken = token;
+    sessionStorage.setItem(DRIVE_TOKEN_KEY, token);
+    const expiry = Date.now() + (parseInt(expiresInSeconds, 10) || 3600) * 1000 - 60000;
+    sessionStorage.setItem(DRIVE_TOKEN_EXPIRY_KEY, String(expiry));
+}
+
+function startGoogleDriveRedirectAuth(clientId) {
+    const redirectUri = location.origin + location.pathname;
+    const state = Math.random().toString(36).slice(2);
+    sessionStorage.setItem(DRIVE_REDIRECT_PENDING_KEY, state);
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'token',
+        scope: DRIVE_SCOPE,
+        include_granted_scopes: 'true',
+        state: state,
+        prompt: ''
+    });
+    location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+async function handleGoogleDriveRedirectResult() {
+    if (!location.hash || location.hash.length < 2) return false;
+    const hashParams = new URLSearchParams(location.hash.slice(1));
+    const token = hashParams.get('access_token');
+    if (!token) return false;
+
+    const pendingState = sessionStorage.getItem(DRIVE_REDIRECT_PENDING_KEY);
+    const returnedState = hashParams.get('state');
+    sessionStorage.removeItem(DRIVE_REDIRECT_PENDING_KEY);
+    if (pendingState && returnedState !== pendingState) {
+        logError('Google Drive redirect state mismatch');
+        return false;
+    }
+
+    saveDriveTokenToSession(token, hashParams.get('expires_in'));
+    history.replaceState(null, '', location.origin + location.pathname + location.search);
+    updateDriveButton();
+
+    try {
+        await ensureDriveAppFolder();
+        const remoteFiles = await listDriveNoteFiles();
+        if (remoteFiles.length === 0) {
+            await uploadAllLocalFilesToDrive();
+        } else {
+            await importGoogleDriveFiles(remoteFiles);
+        }
+        showToast('Google Drive connected');
+    } catch (error) {
+        logError('Google Drive redirect sync failed:', error);
+        alert('Google Drive 연결 실패: ' + (error.message || error));
+    }
+    return true;
 }
 
 async function connectGoogleDrive() {
@@ -33,6 +110,12 @@ async function connectGoogleDrive() {
         clientId = prompt('Google OAuth Web Client ID:');
         if (!clientId) return;
         localStorage.setItem(DRIVE_CLIENT_ID_KEY, clientId.trim());
+        clientId = clientId.trim();
+    }
+
+    if (isMobileBrowser()) {
+        startGoogleDriveRedirectAuth(clientId);
+        return;
     }
 
     try {
@@ -84,7 +167,7 @@ function requestGoogleDriveToken(clientId) {
                     reject(new Error(response.error));
                     return;
                 }
-                driveAccessToken = response.access_token;
+                saveDriveTokenToSession(response.access_token, response.expires_in);
                 updateDriveButton();
                 resolve(response);
             }
@@ -505,5 +588,17 @@ async function autoImportGoogleDriveChanges() {
     await syncGoogleDriveNow({silent: true});
 }
 
-document.addEventListener('DOMContentLoaded', updateDriveButton);
+async function initGoogleDriveOnLoad() {
+    const handledRedirect = await handleGoogleDriveRedirectResult();
+    if (!handledRedirect && restoreDriveTokenFromSession()) {
+        try {
+            await syncGoogleDriveNow({silent: true});
+        } catch (error) {
+            logError('Google Drive restore sync failed:', error);
+        }
+    }
+    updateDriveButton();
+}
+
+document.addEventListener('DOMContentLoaded', initGoogleDriveOnLoad);
 setInterval(autoImportGoogleDriveChanges, DRIVE_AUTO_IMPORT_INTERVAL);
