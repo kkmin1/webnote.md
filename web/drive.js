@@ -285,9 +285,11 @@ async function importGoogleDriveFiles(remoteFiles) {
     remoteFiles = remoteFiles || await listDriveNoteFiles();
     const importedPaths = [];
     const safeRefreshPaths = new Set();
+    const remotePaths = new Set(); // every path Drive currently holds (authoritative)
     for (const file of remoteFiles) {
         const notePath = file.appProperties?.webnotePath;
         if (!notePath) continue;
+        remotePaths.add(normalizeDrivePath(notePath));
 
         // The user deleted this locally; don't recreate it. The Drive copy may
         // still be lingering (slow/failed trash), so re-issue the trash here.
@@ -295,7 +297,7 @@ async function importGoogleDriveFiles(remoteFiles) {
             trashDriveFile(notePath);
             continue;
         }
-        if (driveUploadPending.has(notePath)) continue;
+        if (driveUploadPending.has(normalizeDrivePath(notePath))) continue;
 
         const contentResponse = await driveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
         const blob = await contentResponse.blob();
@@ -315,13 +317,60 @@ async function importGoogleDriveFiles(remoteFiles) {
         driveIndex[notePath] = file.id;
         importedPaths.push(notePath);
     }
+
+    // Propagate deletions from other devices (Google Keep model): anything we
+    // previously knew lived on Drive but is gone now was deleted elsewhere, so
+    // remove our local copy too. Skip on an empty listing to avoid wiping
+    // everything on a transient/failed fetch.
+    let removedPaths = [];
+    if (remoteFiles.length > 0) {
+        removedPaths = await reconcileDriveDeletions(remotePaths);
+    }
+
     saveDriveIndex();
 
-    if (remoteFiles.length > 0) {
+    if (remoteFiles.length > 0 || removedPaths.length > 0) {
         await renderSidebar();
         await refreshOpenEditorsAfterDriveImport(importedPaths, safeRefreshPaths);
+        // If the file we were viewing got deleted on another device, move on.
+        if (window.currentEditor && !currentEditor.path && typeof openRandomFile === 'function') {
+            openRandomFile();
+        }
     }
     return importedPaths.length;
+}
+
+// Remove local files that no longer exist on Drive (deleted from another device).
+// Only touches files we have tracked in driveIndex, so brand-new local notes that
+// haven't been uploaded yet are never removed.
+async function reconcileDriveDeletions(remotePaths) {
+    const removed = [];
+    for (const path of Object.keys(driveIndex)) {
+        const norm = normalizeDrivePath(path);
+        if (remotePaths.has(norm)) continue;        // still on Drive
+        if (driveUploadPending.has(norm)) continue; // mid-upload, not a deletion
+        if (editorHoldsDirtyPath(path)) continue;   // preserve unsaved local edits
+        try {
+            await remove(path); // local FS + in-memory file tree
+        } catch (err) {
+            logError('reconcileDriveDeletions: remove failed', path, err);
+            continue;
+        }
+        if (typeof removeServerFile === 'function') removeServerFile(path);
+        delete driveIndex[path];
+        if (editor && editor.path === path) editor.path = undefined;
+        if (editor2 && editor2.path === path) editor2.path = undefined;
+        removed.push(path);
+        log('Drive deletion propagated; removed local file', path);
+    }
+    return removed;
+}
+
+function editorHoldsDirtyPath(path) {
+    for (const ed of [editor, editor2]) {
+        if (ed && ed.path === path && !ed.isClean()) return true;
+    }
+    return false;
 }
 
 async function updateMemFileAfterDriveImport(path, content, blob) {
@@ -404,7 +453,7 @@ async function uploadAllLocalFilesToDrive() {
 
 async function uploadCurrentFileToDrive(path, content) {
     if (!isGoogleDriveConnected()) return;
-    const normalizedPath = path.startsWith('/') ? path : '/' + path;
+    const normalizedPath = normalizeDrivePath(path);
     driveUploadPending.add(normalizedPath);
     try {
         await uploadBlobToDrive(path, new Blob([content], {type: 'text/markdown;charset=utf-8'}));
