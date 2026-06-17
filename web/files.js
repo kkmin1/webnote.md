@@ -1700,9 +1700,15 @@ async function removeCurrentFile() {
     if (toDirPath(path) === '/archive') {
         log('Removing file permanently', path);
         await remove(oldPath);
+        if (typeof deleteFileFromDrive === 'function') {
+            deleteFileFromDrive(oldPath);
+        }
     } else {
         log('Moving file to archive', path);
         await moveFile(oldPath, newPath);
+        if (typeof deleteFileFromDrive === 'function') {
+            deleteFileFromDrive(oldPath);
+        }
     }
 
     await renderSidebar();

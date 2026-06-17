@@ -372,6 +372,20 @@ async function uploadCurrentFileToDrive(path, content) {
     }
 }
 
+async function deleteFileFromDrive(path) {
+    if (!isGoogleDriveConnected()) return;
+    try {
+        const normalizedPath = path.startsWith('/') ? path : '/' + path;
+        const fileId = driveIndex[normalizedPath] || await findDriveFileByPath(normalizedPath);
+        if (!fileId) return;
+        await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}/trash`, {method: 'POST'});
+        delete driveIndex[normalizedPath];
+        saveDriveIndex();
+    } catch (error) {
+        logError('Google Drive delete failed:', path, error);
+    }
+}
+
 async function uploadFileHandleToDrive(path, fileHandle) {
     if (!isGoogleDriveConnected()) return;
     try {
