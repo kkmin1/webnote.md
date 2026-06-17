@@ -1462,7 +1462,17 @@ function buildFolderMenu(item, dirPath) {
         if (!confirm(`Delete folder "${dirName}" and everything inside it?`)) return;
         try {
             const editorWasInside = pathIsInsideDir(currentEditor.path);
+            // Collect files inside the folder before deletion so we can also remove
+            // them from Google Drive (and tombstone them so the poller won't restore them).
+            const prefix = dirPath.endsWith('/') ? dirPath : dirPath + '/';
+            const innerPaths = [];
+            walk(files, (p, isFile) => {
+                if (isFile && p.startsWith(prefix)) innerPaths.push(p);
+            });
             await removeDir(dirPath);
+            if (typeof deleteFileFromDrive === 'function') {
+                for (const p of innerPaths) deleteFileFromDrive(p);
+            }
             if (editorWasInside) {
                 currentEditor.path = undefined;
             }
@@ -1553,6 +1563,9 @@ function buildFileMenu(item, filePath) {
                 await removeCurrentFile();
             } else {
                 await remove(filePath);
+                if (typeof deleteFileFromDrive === 'function') {
+                    deleteFileFromDrive(filePath);
+                }
                 await renderSidebar();
             }
         } catch (err) {

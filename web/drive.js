@@ -2,6 +2,7 @@ const DRIVE_CLIENT_ID_KEY = 'googleDriveClientId';
 const DRIVE_INDEX_KEY = 'googleDriveIndex';
 const DRIVE_FOLDER_ID_KEY = 'googleDriveFolderId';
 const DRIVE_FOLDER_INDEX_KEY = 'googleDriveFolderIndex';
+const DRIVE_DELETED_KEY = 'googleDriveDeletedPaths';
 const DRIVE_APP_FOLDER_NAME = 'webnote.md';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE_AUTO_IMPORT_INTERVAL = 10000;
@@ -16,6 +17,36 @@ let driveIndex = JSON.parse(localStorage.getItem(DRIVE_INDEX_KEY) || '{}');
 let driveFolderIndex = JSON.parse(localStorage.getItem(DRIVE_FOLDER_INDEX_KEY) || '{}');
 let driveFolderPromises = {};
 let isDriveSyncing = false;
+let driveUploadPending = new Set();
+
+// Tombstones: paths the user deleted locally. The importer must never recreate
+// these, even if the Drive trash call was slow, failed, or hasn't propagated yet.
+// Persisted so a delete survives reloads. Cleared when the same path is re-created.
+let driveDeletedPaths = new Set(JSON.parse(localStorage.getItem(DRIVE_DELETED_KEY) || '[]'));
+
+function normalizeDrivePath(path) {
+    const p = path.startsWith('/') ? path : '/' + path;
+    return p.normalize('NFC');
+}
+
+function saveDriveDeletedPaths() {
+    localStorage.setItem(DRIVE_DELETED_KEY, JSON.stringify([...driveDeletedPaths]));
+}
+
+function markDrivePathDeleted(path) {
+    driveDeletedPaths.add(normalizeDrivePath(path));
+    saveDriveDeletedPaths();
+}
+
+function clearDrivePathDeleted(path) {
+    if (driveDeletedPaths.delete(normalizeDrivePath(path))) {
+        saveDriveDeletedPaths();
+    }
+}
+
+function isDrivePathDeleted(path) {
+    return driveDeletedPaths.has(normalizeDrivePath(path));
+}
 
 function isMobileBrowser() {
     return /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -258,6 +289,14 @@ async function importGoogleDriveFiles(remoteFiles) {
         const notePath = file.appProperties?.webnotePath;
         if (!notePath) continue;
 
+        // The user deleted this locally; don't recreate it. The Drive copy may
+        // still be lingering (slow/failed trash), so re-issue the trash here.
+        if (isDrivePathDeleted(notePath)) {
+            trashDriveFile(notePath);
+            continue;
+        }
+        if (driveUploadPending.has(notePath)) continue;
+
         const contentResponse = await driveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
         const blob = await contentResponse.blob();
         const content = file.mimeType.startsWith('text/') || notePath.endsWith('.md')
@@ -365,20 +404,35 @@ async function uploadAllLocalFilesToDrive() {
 
 async function uploadCurrentFileToDrive(path, content) {
     if (!isGoogleDriveConnected()) return;
+    const normalizedPath = path.startsWith('/') ? path : '/' + path;
+    driveUploadPending.add(normalizedPath);
     try {
         await uploadBlobToDrive(path, new Blob([content], {type: 'text/markdown;charset=utf-8'}));
     } catch (error) {
         logError('Google Drive upload failed:', path, error);
+    } finally {
+        driveUploadPending.delete(normalizedPath);
     }
 }
 
 async function deleteFileFromDrive(path) {
+    // Tombstone first so the importer stops recreating this path immediately,
+    // regardless of whether the network trash below succeeds.
+    markDrivePathDeleted(path);
     if (!isGoogleDriveConnected()) return;
+    await trashDriveFile(path);
+}
+
+async function trashDriveFile(path) {
     try {
-        const normalizedPath = path.startsWith('/') ? path : '/' + path;
+        const normalizedPath = normalizeDrivePath(path);
         const fileId = driveIndex[normalizedPath] || await findDriveFileByPath(normalizedPath);
         if (!fileId) return;
-        await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}/trash`, {method: 'POST'});
+        await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({trashed: true})
+        });
         delete driveIndex[normalizedPath];
         saveDriveIndex();
     } catch (error) {
@@ -398,6 +452,8 @@ async function uploadFileHandleToDrive(path, fileHandle) {
 
 async function uploadBlobToDrive(path, blob) {
     const normalizedPath = path.startsWith('/') ? path : '/' + path;
+    // Re-creating a path that was previously deleted clears its tombstone.
+    clearDrivePathDeleted(normalizedPath);
     const folderId = await ensureDriveFolderForPath(toDirPath(normalizedPath));
     const fileId = driveIndex[normalizedPath] || await findDriveFileByPath(normalizedPath);
     const metadata = {

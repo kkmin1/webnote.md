@@ -1019,9 +1019,19 @@ function saveServerFiles() {
 
 async function openFile(path, saveToHistory = true, el = 'editor-textarea') {
     // There are a few awaits during syncCurrentFile, we should not change currentEditor during that.
+    // Watchdog: if the lock is held far longer than any real sync should take, the
+    // holder leaked or hung on an await (e.g. a writable racing a concurrent delete).
+    // Force-release rather than spin forever and freeze the UI.
+    let waited = 0;
     while (isMessingWithCurrentEditor) {
+        if (waited >= 3000) {
+            logError('isMessingWithCurrentEditor stuck; force-releasing lock');
+            isMessingWithCurrentEditor = false;
+            break;
+        }
         log('Waiting isMessingWithCurrentEditor...');
         await new Promise(r => setTimeout(r, 50));
+        waited += 50;
     }
 
     const id = opId();
